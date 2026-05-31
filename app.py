@@ -1,8 +1,5 @@
 #!/usr/bin/env python3
-"""
-Live 3D Flight Tracker
-Fetches all aircraft from adsb.fi and filters by bounding box server-side.
-"""
+"""Live 3D Flight Tracker — proxies airplanes.live to avoid browser CORS."""
 import http.server
 import socketserver
 import threading
@@ -11,20 +8,34 @@ import urllib.request
 import urllib.parse
 import json
 import os
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 PORT = 3000
 HOST = "localhost"
 
-ADSB_FI = "https://api.adsb.fi/v1/flights"
+API_BASE = "https://api.airplanes.live/v2"
+RADIUS   = 250  # nautical miles (API maximum)
 
-# (lat-min, lon-min, lat-max, lon-max)
-BBOXES = {
-    "middle_east":   (12,  32,  42,  63),
-    "europe":        (35, -12,  72,  45),
-    "north_america": (24, -125, 50, -66),
-    "asia":          (-10, 60,  55, 150),
-    "global":        None,
+# Multiple sampling points per region so 250 nm circles give good coverage
+REGION_POINTS = {
+    "middle_east":   [(27, 45), (24, 55), (33, 44), (35, 51), (30, 31)],
+    "europe":        [(51,  0), (50,  8), (49,  2), (40, -4), (41, 12), (52, 21)],
+    "north_america": [(41, -74), (42, -88), (33, -97), (34, -118), (33, -84)],
+    "asia":          [(40, 116), (35, 139), ( 1, 103), (19,  73), (14, 101)],
+    "global":        [(27, 45), (51, 0), (41, -74), (40, 116), (35, 139),
+                      (-34, 151), (1, 103), (-23, -46), (60, 30), (-26, 28)],
 }
+
+
+def fetch_point(lat, lon):
+    url = f"{API_BASE}/point/{lat}/{lon}/{RADIUS}"
+    req = urllib.request.Request(
+        url,
+        headers={"User-Agent": "FlightTracker/1.0", "Accept": "application/json"},
+    )
+    with urllib.request.urlopen(req, timeout=20) as r:
+        data = json.loads(r.read())
+    return data.get("ac") or data.get("aircraft") or []
 
 
 class Handler(http.server.SimpleHTTPRequestHandler):
@@ -37,37 +48,26 @@ class Handler(http.server.SimpleHTTPRequestHandler):
     def _proxy(self):
         qs     = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
         region = qs.get("region", ["global"])[0]
-        bbox   = BBOXES.get(region)
+        points = REGION_POINTS.get(region, REGION_POINTS["global"])
 
         try:
-            req = urllib.request.Request(
-                ADSB_FI,
-                headers={"User-Agent": "FlightTracker/1.0",
-                         "Accept":     "application/json"},
-            )
-            with urllib.request.urlopen(req, timeout=25) as resp:
-                raw = json.loads(resp.read())
-
-            # adsb.fi returns { "aircraft": [...] } or { "ac": [...] }
-            aircraft = raw.get("aircraft") or raw.get("ac") or []
-
-            if bbox:
-                lamin, lomin, lamax, lomax = bbox
-                aircraft = [
-                    a for a in aircraft
-                    if isinstance(a.get("lat"), (int, float))
-                    and isinstance(a.get("lon"), (int, float))
-                    and lamin <= a["lat"] <= lamax
-                    and lomin <= a["lon"] <= lomax
-                ]
-
-            out = json.dumps({"aircraft": aircraft}).encode()
-            code = 200
+            seen = {}
+            with ThreadPoolExecutor(max_workers=10) as ex:
+                futures = {ex.submit(fetch_point, lat, lon): (lat, lon)
+                           for lat, lon in points}
+                for fut in as_completed(futures):
+                    try:
+                        for a in fut.result():
+                            key = a.get("hex") or a.get("icao24")
+                            if key and key not in seen:
+                                seen[key] = a
+                    except Exception:
+                        pass
+            out = json.dumps({"aircraft": list(seen.values())}).encode()
         except Exception as e:
-            out  = json.dumps({"error": str(e), "aircraft": []}).encode()
-            code = 200
+            out = json.dumps({"error": str(e), "aircraft": []}).encode()
 
-        self.send_response(code)
+        self.send_response(200)
         self.send_header("Content-Type",  "application/json")
         self.send_header("Access-Control-Allow-Origin", "*")
         self.end_headers()
