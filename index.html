@@ -203,7 +203,7 @@
       <div class="i-cell"><label>Altitude</label><span id="i-alt">—</span></div>
       <div class="i-cell"><label>Speed</label>   <span id="i-spd">—</span></div>
       <div class="i-cell"><label>Heading</label> <span id="i-hdg">—</span></div>
-      <div class="i-cell"><label>Country</label> <span id="i-ctry2">—</span></div>
+      <div class="i-cell"><label>A/C Type</label> <span id="i-ctry2">—</span></div>
     </div>
   </div>
 
@@ -363,10 +363,16 @@ function buildHelicopter() {
   return g;
 }
 
-function classify(speedMs, altM) {
-  const kts = (speedMs ?? 0) * 1.944;
-  if (kts < 80)                        return 'helicopter';
-  if (kts < 280 && (altM ?? 0) < 6000) return 'turboprop';
+// adsb.fi gives speed in knots and altitude in feet already
+function classify(typeCode, gs, altFt) {
+  if (typeCode) {
+    const t = typeCode.toUpperCase();
+    if (/^(R[0-9]|EC[0-9]|AW[0-9]|AS[0-9]|H[0-9]|S76|S92|B06|BK1|MD9[0-9])/.test(t))
+      return 'helicopter';
+  }
+  const kts = gs ?? 0;
+  if (kts < 80) return 'helicopter';
+  if (kts < 280 && (altFt ?? 0) < 20000) return 'turboprop';
   return 'jet';
 }
 
@@ -524,13 +530,13 @@ function handleClick(e) {
 function showInfo(d) {
   const TYPE_LABEL = { jet: 'Jet airliner', turboprop: 'Turboprop / GA', helicopter: 'Helicopter' };
   document.getElementById('i-cs').textContent    = d.callsign || d.icao || '—';
-  document.getElementById('i-ctry').textContent  = d.country || 'Unknown';
+  document.getElementById('i-ctry').textContent  = d.reg || d.icao || '—';
   document.getElementById('i-type').textContent  = TYPE_LABEL[d.type] || d.type;
   document.getElementById('i-icao').textContent  = (d.icao || '').toUpperCase();
-  document.getElementById('i-alt').textContent   = fmtFt(d.alt);
-  document.getElementById('i-spd').textContent   = fmtKts(d.speedMs);
+  document.getElementById('i-alt').textContent   = fmtFt(d.altFt);
+  document.getElementById('i-spd').textContent   = fmtKts(d.gs);
   document.getElementById('i-hdg').textContent   = fmtHdg(d.heading);
-  document.getElementById('i-ctry2').textContent = d.country || '—';
+  document.getElementById('i-ctry2').textContent = d.typeCode || '—';
   document.getElementById('info-panel').classList.add('open');
 }
 
@@ -541,17 +547,18 @@ async function fetchAndUpdate() {
   if (!scene) return;
   setStatus('load', 'Fetching flight data…');
 
-  let states;
+  let aircraft;
   try {
     const r = await fetch(`/api/flights?region=${currentRegion}`, {
-      signal: AbortSignal.timeout(18_000),
+      signal: AbortSignal.timeout(20_000),
     });
     const j = await r.json();
     if (j.error) throw new Error(j.error);
-    states = j.states ?? [];
+    // adsb.fi returns { aircraft: [...] }  (field may also be "ac")
+    aircraft = j.aircraft ?? j.ac ?? [];
   } catch (e) {
     console.warn('[flights]', e.message);
-    setStatus('err', 'Could not reach OpenSky — retrying in 15 s');
+    setStatus('err', 'Could not reach flight API — retrying in 15 s');
     return;
   }
 
@@ -559,22 +566,30 @@ async function fetchAndUpdate() {
   const MAX   = 2_000;
   let   count = 0;
 
-  for (const s of states) {
+  for (const s of aircraft) {
     if (count >= MAX) break;
-    const icao     = s[0];
-    const callsign = (s[1] ?? '').trim() || icao;
-    const country  = s[2] ?? 'Unknown';
-    const lon      = s[5], lat = s[6];
-    const baroAlt  = s[7], onGround = s[8];
-    const speedMs  = s[9], heading  = s[10];
-    const alt      = Math.max(baroAlt ?? s[13] ?? 0, 150);
+
+    const icao     = s.hex ?? s.icao24;
+    if (!icao) continue;
+
+    const callsign = (s.flight ?? '').trim() || icao;
+    const reg      = s.r ?? '';
+    const typeCode = s.t ?? '';
+    const lon      = s.lon;
+    const lat      = s.lat;
+    // alt_baro is in feet; "ground" string means on ground
+    const altFt    = typeof s.alt_baro === 'number' ? s.alt_baro : null;
+    const onGround = s.alt_baro === 'ground' || s.on_ground === 1 || s.on_ground === true;
+    const gs       = s.gs;       // knots
+    const heading  = s.track;    // degrees
 
     if (lon == null || lat == null || onGround) continue;
     if (Math.abs(lon) > 180 || Math.abs(lat) > 90) continue;
 
     seen.add(icao); count++;
-    const type = classify(speedMs, alt);
-    flightData.set(icao, { icao, callsign, country, lon, lat, alt, speedMs, heading, type });
+    const altM = altFt != null ? altFt * 0.3048 : 1000; // feet → metres
+    const type = classify(typeCode, gs, altFt);
+    flightData.set(icao, { icao, callsign, reg, typeCode, lon, lat, altFt, gs, heading, type });
 
     if (!aircraftMeshes.has(icao)) {
       const grp = makeGroup(type);
@@ -583,7 +598,7 @@ async function fetchAndUpdate() {
       addLabel(icao, callsign, type);
     }
 
-    placeGroup(aircraftMeshes.get(icao), lon, lat, alt, heading ?? 0);
+    placeGroup(aircraftMeshes.get(icao), lon, lat, Math.max(altM, 100), heading ?? 0);
   }
 
   // Cull departed aircraft
@@ -606,8 +621,9 @@ async function fetchAndUpdate() {
 // ─────────────────────────────────────────────────────────────
 // Helpers
 // ─────────────────────────────────────────────────────────────
-function fmtFt(m)  { return m != null ? `${Math.round(m * 3.28084).toLocaleString()} ft` : 'N/A'; }
-function fmtKts(s) { return s != null ? `${Math.round(s * 1.944)} kts` : 'N/A'; }
+// adsb.fi already gives altitude in feet and speed in knots
+function fmtFt(ft)   { return ft  != null ? `${Math.round(ft).toLocaleString()} ft` : 'N/A'; }
+function fmtKts(kts) { return kts != null ? `${Math.round(kts)} kts` : 'N/A'; }
 function fmtHdg(d) {
   if (d == null) return 'N/A';
   return `${Math.round(d)}° ${['N','NE','E','SE','S','SW','W','NW'][Math.round(d/45)%8]}`;
