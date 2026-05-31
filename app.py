@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Live 3D Flight Tracker — proxies airplanes.live to avoid browser CORS."""
+"""Live 3D Flight Tracker — proxies airplanes.live (civil + military)."""
 import http.server
 import socketserver
 import threading
@@ -26,16 +26,35 @@ REGION_POINTS = {
                       (-34, 151), (1, 103), (-23, -46), (60, 30), (-26, 28)],
 }
 
+# Bounding boxes for filtering global /mil results by region
+REGION_BBOX = {
+    "middle_east":   (12,  32,  42,  63),
+    "europe":        (35, -12,  72,  45),
+    "north_america": (24, -125, 50, -66),
+    "asia":          (-10, 60,  55, 150),
+    "global":        None,
+}
+
 
 def fetch_point(lat, lon):
     url = f"{API_BASE}/point/{lat}/{lon}/{RADIUS}"
     req = urllib.request.Request(
-        url,
-        headers={"User-Agent": "FlightTracker/1.0", "Accept": "application/json"},
-    )
+        url, headers={"User-Agent": "FlightTracker/1.0", "Accept": "application/json"})
     with urllib.request.urlopen(req, timeout=20) as r:
         data = json.loads(r.read())
     return data.get("ac") or data.get("aircraft") or []
+
+
+def fetch_mil():
+    url = f"{API_BASE}/mil"
+    req = urllib.request.Request(
+        url, headers={"User-Agent": "FlightTracker/1.0", "Accept": "application/json"})
+    with urllib.request.urlopen(req, timeout=20) as r:
+        data = json.loads(r.read())
+    aircraft = data.get("ac") or data.get("aircraft") or []
+    for a in aircraft:
+        a["mil"] = True
+    return aircraft
 
 
 class Handler(http.server.SimpleHTTPRequestHandler):
@@ -49,20 +68,37 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         qs     = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
         region = qs.get("region", ["global"])[0]
         points = REGION_POINTS.get(region, REGION_POINTS["global"])
+        bbox   = REGION_BBOX.get(region)
 
         try:
             seen = {}
-            with ThreadPoolExecutor(max_workers=10) as ex:
-                futures = {ex.submit(fetch_point, lat, lon): (lat, lon)
-                           for lat, lon in points}
-                for fut in as_completed(futures):
+            tasks = [("civil", lat, lon) for lat, lon in points]
+
+            with ThreadPoolExecutor(max_workers=12) as ex:
+                civil_futs = {ex.submit(fetch_point, lat, lon): None for lat, lon in points}
+                mil_fut    = ex.submit(fetch_mil)
+
+                for fut in as_completed(list(civil_futs) + [mil_fut]):
+                    is_mil = (fut is mil_fut)
                     try:
                         for a in fut.result():
                             key = a.get("hex") or a.get("icao24")
-                            if key and key not in seen:
+                            if not key:
+                                continue
+                            # filter military aircraft by region bbox
+                            if is_mil and bbox:
+                                lat_a = a.get("lat")
+                                lon_a = a.get("lon")
+                                if lat_a is None or lon_a is None:
+                                    continue
+                                lamin, lomin, lamax, lomax = bbox
+                                if not (lamin <= lat_a <= lamax and lomin <= lon_a <= lomax):
+                                    continue
+                            if key not in seen:
                                 seen[key] = a
                     except Exception:
                         pass
+
             out = json.dumps({"aircraft": list(seen.values())}).encode()
         except Exception as e:
             out = json.dumps({"error": str(e), "aircraft": []}).encode()

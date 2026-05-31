@@ -13,22 +13,24 @@
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
     #map { width: 100%; height: 100%; }
 
-    /* labels */
     #labels { position: fixed; inset: 0; pointer-events: none; z-index: 5; }
     .lbl {
-      position: absolute; transform: translate(-50%, -130%);
-      background: rgba(4,8,20,.82); border: 1px solid rgba(255,136,0,.45);
-      border-radius: 6px; padding: 2px 7px;
+      position: absolute; transform: translate(-50%, -160%);
+      background: rgba(4,8,20,.85); border: 1px solid rgba(255,136,0,.5);
+      border-radius: 5px; padding: 2px 7px;
       font-size: 10px; font-weight: 700; color: #ffaa44;
       white-space: nowrap; pointer-events: none;
-      text-shadow: 0 0 6px rgba(255,100,0,.8);
+      text-shadow: 0 0 8px rgba(255,100,0,.9);
+    }
+    .lbl.mil {
+      border-color: rgba(100,220,100,.6); color: #88ee88;
+      text-shadow: 0 0 8px rgba(80,220,80,.9);
     }
 
-    /* header */
     #header {
       position: fixed; top: 14px; left: 50%; transform: translateX(-50%);
       display: flex; align-items: center; gap: 16px;
-      background: rgba(4,8,20,.86); border: 1px solid rgba(80,160,255,.22);
+      background: rgba(4,8,20,.88); border: 1px solid rgba(80,160,255,.22);
       border-radius: 14px; padding: 9px 20px;
       backdrop-filter: blur(14px); z-index: 10;
       pointer-events: all; white-space: nowrap; user-select: none;
@@ -40,8 +42,8 @@
     .stat { display: flex; flex-direction: column; align-items: center; gap: 1px; }
     .stat-v { font-size: 17px; font-weight: 800; color: #ff6620; line-height: 1; }
     .stat-l { font-size: 9px; color: rgba(255,255,255,.38); text-transform: uppercase; letter-spacing: 1px; }
+    #hdr-mil { color: #66ee66; }
 
-    /* region tabs */
     #regions {
       position: fixed; top: 72px; left: 50%; transform: translateX(-50%);
       display: flex; gap: 6px; z-index: 10; pointer-events: all;
@@ -56,30 +58,35 @@
     .reg-btn:hover  { color: #fff; border-color: rgba(255,136,0,.5); }
     .reg-btn.active { background: rgba(255,85,0,.28); border-color: #ff5500; color: #fff; }
 
-    /* info panel */
     #info-panel {
-      position: fixed; top: 110px; right: 14px; width: 230px;
-      background: rgba(4,8,20,.9); border: 1px solid rgba(80,160,255,.28);
+      position: fixed; top: 110px; right: 14px; width: 235px;
+      background: rgba(4,8,20,.92); border: 1px solid rgba(80,160,255,.28);
       border-radius: 14px; padding: 15px;
       backdrop-filter: blur(14px); z-index: 10;
       display: none; pointer-events: all;
     }
     #info-panel.open { display: block; }
+    #info-panel.mil-panel { border-color: rgba(80,220,80,.4); }
     #info-close {
       position: absolute; top: 8px; right: 10px;
       background: none; border: none; color: rgba(255,255,255,.3);
       cursor: pointer; font-size: 20px; line-height: 1; padding: 2px 5px;
-      transition: color .15s;
     }
     #info-close:hover { color: #fff; }
     .i-cs   { font-size: 22px; font-weight: 800; color: #fff; margin-bottom: 2px; }
-    .i-sub  { font-size: 11px; color: rgba(255,255,255,.36); margin-bottom: 11px; }
+    .i-sub  { font-size: 11px; color: rgba(255,255,255,.4); margin-bottom: 11px; }
+    .i-badge {
+      display: inline-block; font-size: 9px; font-weight: 700;
+      background: rgba(80,220,80,.2); border: 1px solid rgba(80,220,80,.5);
+      color: #88ee88; border-radius: 4px; padding: 1px 6px; margin-left: 6px;
+      vertical-align: middle; letter-spacing: 1px;
+    }
     .i-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
     .i-cell label { display: block; font-size: 9px; color: rgba(255,255,255,.36);
       text-transform: uppercase; letter-spacing: .9px; margin-bottom: 2px; }
     .i-cell span  { font-size: 13px; font-weight: 700; color: #ff8844; }
+    .i-cell span.mil-val { color: #88ee88; }
 
-    /* tilt / zoom controls */
     #controls {
       position: fixed; right: 14px; bottom: 50px;
       display: flex; flex-direction: column; gap: 5px;
@@ -96,7 +103,6 @@
     }
     .ctl:hover { background: rgba(255,85,0,.22); border-color: #ff5500; color: #fff; }
 
-    /* status */
     #status-bar {
       position: fixed; bottom: 12px; left: 50%; transform: translateX(-50%);
       display: flex; align-items: center; gap: 7px;
@@ -112,7 +118,6 @@
     @keyframes blink { 0%,100%{opacity:1}50%{opacity:.2} }
     #status-msg { font-size: 11px; color: rgba(255,255,255,.48); }
 
-    /* splash */
     #splash {
       position: fixed; inset: 0; background: #010409;
       display: flex; flex-direction: column;
@@ -130,13 +135,14 @@
 
 <div id="map"></div>
 <div id="labels"></div>
-
 <div id="splash"><div class="spin"></div><p>Loading map…</p></div>
 
 <div id="header">
   <h1>✈ <span class="live">LIVE</span> FLIGHTS</h1>
   <div class="hdiv"></div>
-  <div class="stat"><div class="stat-v" id="hdr-count">—</div><div class="stat-l">Aircraft</div></div>
+  <div class="stat"><div class="stat-v" id="hdr-count">—</div><div class="stat-l">Civil</div></div>
+  <div class="hdiv"></div>
+  <div class="stat"><div class="stat-v" id="hdr-mil">—</div><div class="stat-l">Military</div></div>
   <div class="hdiv"></div>
   <div class="stat"><div class="stat-v" id="hdr-time">—</div><div class="stat-l">Updated</div></div>
 </div>
@@ -151,7 +157,7 @@
 
 <div id="info-panel">
   <button id="info-close">×</button>
-  <div class="i-cs"  id="i-cs">—</div>
+  <div class="i-cs" id="i-cs">—</div>
   <div class="i-sub" id="i-sub">—</div>
   <div class="i-grid">
     <div class="i-cell"><label>Altitude</label><span id="i-alt">—</span></div>
@@ -174,24 +180,24 @@
 </div>
 
 <script>
-// ── constants ──────────────────────────────────────────────────
+// ── config ─────────────────────────────────────────────────────
 const REFRESH_MS = 15000;
-const MODEL_M    = 55000; // exaggerated size so models are visible at zoom 5-8
+const MODEL_M    = 52000; // model scale (exaggerated metres for visibility)
+const ALT_EXAG   = 6;     // vertical exaggeration so aircraft visibly float
 
 const REGION_VIEWS = {
-  middle_east:   { center: [45,  27], zoom: 5.5, pitch: 70 },
-  europe:        { center: [10,  50], zoom: 4.5, pitch: 65 },
-  north_america: { center: [-95, 38], zoom: 4.0, pitch: 65 },
-  asia:          { center: [110, 30], zoom: 4.0, pitch: 65 },
+  middle_east:   { center: [45,  27], zoom: 5.5, pitch: 72 },
+  europe:        { center: [10,  50], zoom: 4.5, pitch: 68 },
+  north_america: { center: [-95, 38], zoom: 4.0, pitch: 68 },
+  asia:          { center: [110, 30], zoom: 4.0, pitch: 68 },
   global:        { center: [20,  25], zoom: 2.5, pitch: 55 },
 };
 
 // ── state ──────────────────────────────────────────────────────
 let currentRegion = 'middle_east';
-let flightMap     = new Map(); // hex → flight data
+let flightMap     = new Map(); // hex → parsed flight
 let meshMap       = new Map(); // hex → THREE.Group
-let scene, threeRenderer, camera;
-let map;
+let scene, threeRenderer, camera, map;
 
 // ── MapLibre ───────────────────────────────────────────────────
 map = new maplibregl.Map({
@@ -222,109 +228,287 @@ map.on('load', () => {
   startFetching();
 });
 
-// ── Three.js models ────────────────────────────────────────────
-const MAT_JET  = new THREE.MeshLambertMaterial({ color: 0xff8800, emissive: 0xff4400, emissiveIntensity: 0.4 });
-const MAT_PROP = new THREE.MeshLambertMaterial({ color: 0xffaa00, emissive: 0xff6600, emissiveIntensity: 0.35 });
-const MAT_HELI = new THREE.MeshLambertMaterial({ color: 0xff6600, emissive: 0xff3300, emissiveIntensity: 0.45 });
+// ── materials ──────────────────────────────────────────────────
+// Civil airliner — orange glow
+const MAT_JET = new THREE.MeshLambertMaterial({
+  color: 0xff8800, emissive: 0xff5500, emissiveIntensity: 0.45,
+});
+// Civil turboprop — amber
+const MAT_PROP = new THREE.MeshLambertMaterial({
+  color: 0xffaa00, emissive: 0xff7700, emissiveIntensity: 0.4,
+});
+// Civil helicopter — orange-red
+const MAT_HELI = new THREE.MeshLambertMaterial({
+  color: 0xff6600, emissive: 0xff3300, emissiveIntensity: 0.5,
+});
+// Military jet — green radar glow
+const MAT_MIL = new THREE.MeshLambertMaterial({
+  color: 0x44cc44, emissive: 0x22aa22, emissiveIntensity: 0.55,
+});
+// Military helicopter
+const MAT_MIL_H = new THREE.MeshLambertMaterial({
+  color: 0x55dd55, emissive: 0x228822, emissiveIntensity: 0.5,
+});
 
-function buildJet() {
+// ── model builders ─────────────────────────────────────────────
+// Convention: fuselage along LOCAL +X (nose → +X, tail → -X)
+// Wings span LOCAL ±Z; models are built at unit scale then placed via matrix
+
+function buildJet(mat) {
   const g = new THREE.Group();
-  // fuselage
-  const fus = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 0.7, 12, 8), MAT_JET);
-  fus.rotation.z = Math.PI / 2; g.add(fus);
-  // wings
-  const wing = new THREE.Mesh(new THREE.BoxGeometry(18, 0.25, 3.2), MAT_JET);
-  wing.rotation.z = 0.08; g.add(wing);
-  // h-stabilizer
-  const hs = new THREE.Mesh(new THREE.BoxGeometry(6, 0.2, 1.4), MAT_JET);
-  hs.position.x = -5.5; g.add(hs);
-  // v-stabilizer
-  const vs = new THREE.Mesh(new THREE.BoxGeometry(0.2, 2.2, 1.4), MAT_JET);
-  vs.position.set(-5.5, 1.1, 0); g.add(vs);
-  // engines
-  [-4.2, 4.2].forEach(x => {
-    const eng = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.45, 2.4, 8), MAT_JET);
-    eng.rotation.z = Math.PI / 2; eng.position.set(x, -0.9, 0); g.add(eng);
+
+  // Main fuselage cylinder — axis along X after rotation
+  const fus = new THREE.Mesh(new THREE.CylinderGeometry(0.88, 0.75, 13, 12), mat);
+  fus.rotation.z = Math.PI / 2;
+  g.add(fus);
+
+  // Nose cone — tip at +X
+  const nose = new THREE.Mesh(new THREE.ConeGeometry(0.88, 3.5, 12), mat);
+  nose.rotation.z = -Math.PI / 2;  // tip toward +X
+  nose.position.x = 8.25;
+  g.add(nose);
+
+  // Tail cone — tip at -X
+  const tail = new THREE.Mesh(new THREE.ConeGeometry(0.75, 2.5, 12), mat);
+  tail.rotation.z = Math.PI / 2;   // tip toward -X
+  tail.position.x = -7.75;
+  g.add(tail);
+
+  // Main wings — span in Z, chord in X, slightly swept back
+  const innerWing = new THREE.Mesh(new THREE.BoxGeometry(5, 0.22, 12), mat);
+  innerWing.position.x = 0.5; // slightly forward of centre
+  g.add(innerWing);
+  const outerWing = new THREE.Mesh(new THREE.BoxGeometry(3, 0.16, 8), mat);
+  outerWing.position.set(-0.8, 0, 10);  // outer panel, swept back
+  g.add(outerWing);
+  const outerWingL = new THREE.Mesh(new THREE.BoxGeometry(3, 0.16, 8), mat);
+  outerWingL.position.set(-0.8, 0, -10);
+  g.add(outerWingL);
+
+  // Winglets — small vertical fins at tips
+  const wlGeom = new THREE.BoxGeometry(0.5, 1.8, 0.22);
+  [14, -14].forEach(z => {
+    const wl = new THREE.Mesh(wlGeom, mat);
+    wl.position.set(-0.5, 1.0, z);
+    g.add(wl);
   });
+
+  // Engines under wings (2 pod engines)
+  [5.5, -5.5].forEach(z => {
+    const pod = new THREE.Mesh(new THREE.CylinderGeometry(0.58, 0.5, 3.2, 10), mat);
+    pod.rotation.z = Math.PI / 2;
+    pod.position.set(0.5, -1.1, z);
+    g.add(pod);
+    // intake ring
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.58, 0.1, 6, 12), mat);
+    ring.rotation.y = Math.PI / 2;
+    ring.position.set(2.1, -1.1, z);
+    g.add(ring);
+  });
+
+  // Horizontal stabiliser
+  const hs = new THREE.Mesh(new THREE.BoxGeometry(2.5, 0.18, 9), mat);
+  hs.position.x = -8.5;
+  g.add(hs);
+
+  // Vertical fin
+  const vf = new THREE.Mesh(new THREE.BoxGeometry(3, 3.2, 0.22), mat);
+  vf.position.set(-8, 1.8, 0);
+  g.add(vf);
+
   return g;
 }
 
-function buildTurboprop() {
+function buildFighter(mat) {
   const g = new THREE.Group();
-  const fus = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.55, 8, 8), MAT_PROP);
-  fus.rotation.z = Math.PI / 2; g.add(fus);
-  const wing = new THREE.Mesh(new THREE.BoxGeometry(12, 0.22, 2.6), MAT_PROP);
-  wing.position.y = 0.5; g.add(wing);
-  // prop disk
-  const prop = new THREE.Mesh(new THREE.CylinderGeometry(1.6, 1.6, 0.12, 12), MAT_PROP);
-  prop.position.x = 4.2; prop.rotation.z = Math.PI / 2; g.add(prop);
-  const hs = new THREE.Mesh(new THREE.BoxGeometry(4, 0.18, 1.2), MAT_PROP);
-  hs.position.x = -4; g.add(hs);
+
+  // Slim fuselage
+  const fus = new THREE.Mesh(new THREE.CylinderGeometry(0.65, 0.55, 14, 10), mat);
+  fus.rotation.z = Math.PI / 2;
+  g.add(fus);
+
+  // Long pointed nose
+  const nose = new THREE.Mesh(new THREE.ConeGeometry(0.65, 6, 10), mat);
+  nose.rotation.z = -Math.PI / 2;
+  nose.position.x = 10;
+  g.add(nose);
+
+  // Afterburner tail
+  const abn = new THREE.Mesh(new THREE.ConeGeometry(0.7, 3, 10), mat);
+  abn.rotation.z = Math.PI / 2;
+  abn.position.x = -9;
+  g.add(abn);
+
+  // Swept delta wings — large inner panel + swept outer
+  const mainWing = new THREE.Mesh(new THREE.BoxGeometry(7, 0.18, 14), mat);
+  mainWing.position.set(-1, 0, 0);
+  g.add(mainWing);
+  const outerR = new THREE.Mesh(new THREE.BoxGeometry(4, 0.14, 6), mat);
+  outerR.position.set(-4.5, 0, 10);
+  g.add(outerR);
+  const outerL = new THREE.Mesh(new THREE.BoxGeometry(4, 0.14, 6), mat);
+  outerL.position.set(-4.5, 0, -10);
+  g.add(outerL);
+
+  // Canards (small forward fins)
+  const canardR = new THREE.Mesh(new THREE.BoxGeometry(2, 0.12, 4), mat);
+  canardR.position.set(4, 0, 3.5);
+  g.add(canardR);
+  const canardL = new THREE.Mesh(new THREE.BoxGeometry(2, 0.12, 4), mat);
+  canardL.position.set(4, 0, -3.5);
+  g.add(canardL);
+
+  // Twin vertical tails (splayed outward)
+  const tailR = new THREE.Mesh(new THREE.BoxGeometry(3.5, 2.8, 0.22), mat);
+  tailR.position.set(-7.5, 1.5, 1.8);
+  tailR.rotation.x = 0.18;
+  g.add(tailR);
+  const tailL = new THREE.Mesh(new THREE.BoxGeometry(3.5, 2.8, 0.22), mat);
+  tailL.position.set(-7.5, 1.5, -1.8);
+  tailL.rotation.x = -0.18;
+  g.add(tailL);
+
   return g;
 }
 
-function buildHelicopter() {
+function buildTurboprop(mat) {
   const g = new THREE.Group();
-  // body
-  const body = new THREE.Mesh(new THREE.SphereGeometry(1.4, 8, 6), MAT_HELI);
-  body.scale.set(1.6, 0.9, 1); g.add(body);
-  // tail boom
-  const boom = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.18, 6, 6), MAT_HELI);
-  boom.rotation.z = Math.PI / 2; boom.position.x = -4; g.add(boom);
-  // main rotor
-  const rotor = new THREE.Mesh(new THREE.CylinderGeometry(4.2, 4.2, 0.08, 16), MAT_HELI);
-  rotor.position.y = 1.6; g.add(rotor);
-  // tail rotor
-  const tr = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 0.9, 0.07, 8), MAT_HELI);
-  tr.position.set(-7, 0.4, 0.4); tr.rotation.x = Math.PI / 2; g.add(tr);
+
+  const fus = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 0.65, 11, 10), mat);
+  fus.rotation.z = Math.PI / 2;
+  g.add(fus);
+
+  const nose = new THREE.Mesh(new THREE.ConeGeometry(0.8, 2.5, 10), mat);
+  nose.rotation.z = -Math.PI / 2;
+  nose.position.x = 7;
+  g.add(nose);
+
+  const tail = new THREE.Mesh(new THREE.ConeGeometry(0.65, 2, 10), mat);
+  tail.rotation.z = Math.PI / 2;
+  tail.position.x = -7;
+  g.add(tail);
+
+  // High-mounted wings
+  const wing = new THREE.Mesh(new THREE.BoxGeometry(4, 0.2, 16), mat);
+  wing.position.set(0.5, 0.9, 0);
+  g.add(wing);
+
+  // Propeller disk
+  const propDisk = new THREE.Mesh(new THREE.CylinderGeometry(2.2, 2.2, 0.12, 16), mat);
+  propDisk.rotation.z = Math.PI / 2;
+  propDisk.position.x = 8;
+  g.add(propDisk);
+  // Prop hub
+  const hub = new THREE.Mesh(new THREE.SphereGeometry(0.3, 8, 6), mat);
+  hub.position.x = 8;
+  g.add(hub);
+
+  const hs = new THREE.Mesh(new THREE.BoxGeometry(2, 0.16, 7), mat);
+  hs.position.x = -7.5;
+  g.add(hs);
+
+  const vf = new THREE.Mesh(new THREE.BoxGeometry(2.5, 2.6, 0.2), mat);
+  vf.position.set(-7.5, 1.5, 0);
+  g.add(vf);
+
   return g;
 }
 
+function buildHelicopter(mat) {
+  const g = new THREE.Group();
+
+  // Bubble body
+  const body = new THREE.Mesh(new THREE.SphereGeometry(1.6, 10, 7), mat);
+  body.scale.set(1.8, 1.0, 1.1);
+  g.add(body);
+
+  // Cockpit nose bulge
+  const cock = new THREE.Mesh(new THREE.SphereGeometry(1.1, 8, 6), mat);
+  cock.scale.set(1.4, 0.9, 1.0);
+  cock.position.x = 1.8;
+  g.add(cock);
+
+  // Tail boom
+  const boom = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.15, 9, 7), mat);
+  boom.rotation.z = Math.PI / 2;
+  boom.position.x = -6;
+  g.add(boom);
+
+  // Main rotor disk
+  const rotor = new THREE.Mesh(new THREE.CylinderGeometry(6, 6, 0.1, 20), mat);
+  rotor.position.y = 1.8;
+  g.add(rotor);
+  // Rotor hub
+  const rhub = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, 0.6, 8), mat);
+  rhub.position.y = 1.85;
+  g.add(rhub);
+
+  // Tail rotor
+  const tr = new THREE.Mesh(new THREE.CylinderGeometry(1.4, 1.4, 0.1, 12), mat);
+  tr.position.set(-10.5, 0.5, 0.5);
+  tr.rotation.x = Math.PI / 2;
+  g.add(tr);
+
+  // Skids
+  [0.8, -0.8].forEach(z => {
+    const skid = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 5, 6), mat);
+    skid.rotation.z = Math.PI / 2;
+    skid.position.set(0, -1.7, z * 1.3);
+    g.add(skid);
+    // Strut
+    const strut = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 1.4, 5), mat);
+    strut.position.set(0, -1.1, z * 1.3);
+    g.add(strut);
+  });
+
+  return g;
+}
+
+// ── classify aircraft type ─────────────────────────────────────
 function classify(typeCode, gs, altFt) {
-  if (typeCode) {
-    const t = typeCode.toUpperCase();
-    if (/^(R[0-9]|EC[0-9]|AW|AS[3-9]|H[0-9]|S76|S92|B06|BK1|MD9[0-9]|A10[9]|EC[0-9]|UH|HU|CH)/.test(t)) return 'heli';
-  }
+  const t = (typeCode || '').toUpperCase();
+  // helicopter ICAO type patterns
+  if (/^(R[0-9]|EC[0-9]|AW[0-9]|AS[34]\d|H[0-6]|S76|S92|B06|BK1|MD9\d|UH|HH|AH|CH|SH|MH)/.test(t))
+    return 'heli';
   if ((gs ?? 0) < 80) return 'heli';
-  if ((gs ?? 0) < 280 && (altFt ?? 0) < 20000) return 'prop';
+  if ((gs ?? 0) < 300 && (altFt ?? 0) < 20000) return 'prop';
   return 'jet';
 }
 
-// ── Three.js MapLibre custom layer ─────────────────────────────
+// ── Three.js custom MapLibre layer ─────────────────────────────
 const threeLayer = {
   id: '3d-aircraft', type: 'custom', renderingMode: '3d',
 
   onAdd(map, gl) {
-    scene   = new THREE.Scene();
-    camera  = new THREE.Camera();
+    scene  = new THREE.Scene();
+    camera = new THREE.Camera();
+
     threeRenderer = new THREE.WebGLRenderer({
-      canvas:   map.getCanvas(),
-      context:  gl,
-      antialias: true,
+      canvas: map.getCanvas(), context: gl, antialias: true,
     });
     threeRenderer.autoClear = false;
 
-    scene.add(new THREE.AmbientLight(0xffffff, 0.7));
-    const sun = new THREE.DirectionalLight(0xfff8e0, 0.9);
-    sun.position.set(0, 1, 0.5);
+    scene.add(new THREE.AmbientLight(0xffffff, 0.75));
+    const sun = new THREE.DirectionalLight(0xfff8e0, 1.0);
+    sun.position.set(1, 2, 1);
     scene.add(sun);
   },
 
   render(gl, mercatorMatrix) {
     camera.projectionMatrix = new THREE.Matrix4().fromArray(mercatorMatrix);
     camera.projectionMatrixInverse.copy(camera.projectionMatrix).invert();
-
     threeRenderer.resetState();
     threeRenderer.render(scene, camera);
-
     refreshLabels();
     map.triggerRepaint();
   },
 };
 
 // ── Mercator placement ─────────────────────────────────────────
-function placeGroup(group, lon, lat, altM, headingDeg) {
-  const mc = maplibregl.MercatorCoordinate.fromLngLat([lon, lat], altM);
+// M = T × Rz(heading − π/2) × S(s, −s, s)
+// The −s on Y corrects for mercator's south-positive Y axis.
+function placeGroup(group, lon, lat, displayAltM, headingDeg) {
+  const mc = maplibregl.MercatorCoordinate.fromLngLat([lon, lat], displayAltM);
   const s  = mc.meterInMercatorCoordinateUnits() * MODEL_M;
   const θ  = THREE.MathUtils.degToRad(headingDeg ?? 0) - Math.PI / 2;
 
@@ -338,23 +522,24 @@ function placeGroup(group, lon, lat, altM, headingDeg) {
 
 // ── Labels ─────────────────────────────────────────────────────
 const labelsEl = document.getElementById('labels');
-const labelEls = new Map(); // hex → div
+const labelEls = new Map();
 
 function refreshLabels() {
-  if (map.getZoom() < 5) {
-    labelsEl.style.display = 'none';
-    return;
-  }
+  if (map.getZoom() < 5) { labelsEl.style.display = 'none'; return; }
   labelsEl.style.display = '';
-  const visible = new Set();
+  const W = window.innerWidth, H = window.innerHeight;
+  const shown = new Set();
+
   for (const [hex, d] of flightMap) {
+    if (d.onGround) continue;
     const px = map.project([d.lon, d.lat]);
-    if (px.x < -20 || px.y < -20 || px.x > window.innerWidth + 20 || px.y > window.innerHeight + 20) continue;
-    visible.add(hex);
+    if (px.x < -30 || px.y < -30 || px.x > W + 30 || px.y > H + 30) continue;
+    shown.add(hex);
+
     let el = labelEls.get(hex);
     if (!el) {
       el = document.createElement('div');
-      el.className = 'lbl';
+      el.className = 'lbl' + (d.mil ? ' mil' : '');
       labelsEl.appendChild(el);
       labelEls.set(hex, el);
     }
@@ -363,19 +548,19 @@ function refreshLabels() {
     el.style.top    = px.y + 'px';
     el.style.display = '';
   }
-  // hide labels for gone aircraft
+
   for (const [hex, el] of labelEls) {
-    if (!visible.has(hex)) el.style.display = 'none';
+    if (!shown.has(hex)) el.style.display = 'none';
   }
 }
 
-// ── Click to inspect ───────────────────────────────────────────
+// ── Click to inspect (screen-space proximity) ──────────────────
 map.getCanvas().addEventListener('click', e => {
-  const rect  = map.getCanvas().getBoundingClientRect();
-  const cx = e.clientX - rect.left;
-  const cy = e.clientY - rect.top;
-  let best = null, bestD2 = 50 * 50;
+  const rect = map.getCanvas().getBoundingClientRect();
+  const cx = e.clientX - rect.left, cy = e.clientY - rect.top;
+  let best = null, bestD2 = 55 * 55;
   for (const [, d] of flightMap) {
+    if (d.onGround) continue;
     const px = map.project([d.lon, d.lat]);
     const d2 = (px.x - cx) ** 2 + (px.y - cy) ** 2;
     if (d2 < bestD2) { bestD2 = d2; best = d; }
@@ -384,16 +569,29 @@ map.getCanvas().addEventListener('click', e => {
 });
 
 function showPanel(d) {
-  document.getElementById('i-cs').textContent  = d.callsign || d.hex?.toUpperCase() || '—';
-  document.getElementById('i-sub').textContent = d.reg ? `Reg: ${d.reg}` : (d.hex?.toUpperCase() || '—');
-  document.getElementById('i-alt').textContent = d.altFt  != null ? `${Math.round(d.altFt).toLocaleString()} ft` : 'N/A';
-  document.getElementById('i-spd').textContent = d.gs     != null ? `${Math.round(d.gs)} kts` : 'N/A';
-  document.getElementById('i-hdg').textContent = d.track  != null ? `${Math.round(d.track)}°` : 'N/A';
+  document.getElementById('i-cs').innerHTML =
+    (d.callsign || d.hex?.toUpperCase() || '—') +
+    (d.mil ? '<span class="i-badge">MILITARY</span>' : '');
+  document.getElementById('i-sub').textContent = d.reg
+    ? `Reg: ${d.reg}` : (d.hex?.toUpperCase() || '—');
+  document.getElementById('i-alt').textContent =
+    d.altFt != null ? `${Math.round(d.altFt).toLocaleString()} ft` : 'N/A';
+  document.getElementById('i-spd').textContent =
+    d.gs   != null ? `${Math.round(d.gs)} kts` : 'N/A';
+  document.getElementById('i-hdg').textContent =
+    d.track != null ? `${Math.round(d.track)}°` : 'N/A';
   document.getElementById('i-typ').textContent = d.typeCode || '—';
-  document.getElementById('info-panel').classList.add('open');
+
+  const panel = document.getElementById('info-panel');
+  panel.classList.toggle('mil-panel', !!d.mil);
+  // tint value spans for military
+  document.querySelectorAll('.i-cell span').forEach(s => {
+    s.classList.toggle('mil-val', !!d.mil);
+  });
+  panel.classList.add('open');
 }
 
-// ── Fetch & update ─────────────────────────────────────────────
+// ── Fetch + update ─────────────────────────────────────────────
 function setStatus(cls, msg) {
   document.getElementById('s-dot').className  = 's-dot' + (cls ? ' ' + cls : '');
   document.getElementById('status-msg').textContent = msg;
@@ -402,35 +600,39 @@ function setStatus(cls, msg) {
 async function fetchAndUpdate() {
   setStatus('load', 'Fetching flight data…');
   try {
-    const r = await fetch(`/api/flights?region=${currentRegion}`, {
-      signal: AbortSignal.timeout(30000),
-    });
+    const r = await fetch(`/api/flights?region=${currentRegion}`,
+                          { signal: AbortSignal.timeout(35000) });
     const j = await r.json();
     const list = j.aircraft ?? j.ac ?? [];
 
-    // parse
     const newMap = new Map();
     for (const s of list) {
-      const hex  = s.hex || s.icao24;
+      const hex = s.hex || s.icao24;
       if (!hex) continue;
-      const lat  = s.lat ?? s.latitude;
-      const lon  = s.lon ?? s.longitude;
+      const lat = s.lat ?? s.latitude;
+      const lon = s.lon ?? s.longitude;
       if (lat == null || lon == null) continue;
 
       const altFt    = typeof s.alt_baro === 'number' ? s.alt_baro
                      : typeof s.altitude  === 'number' ? s.altitude : null;
       const onGround = s.alt_baro === 'ground' || s.on_ground === true || s.on_ground === 1;
-      const altM     = onGround ? 0 : (altFt != null ? altFt * 0.3048 : 800);
-      const gs       = s.gs ?? s.velocity ?? null;
-      const track    = s.track ?? s.true_track ?? null;
-      const callsign = (s.flight ?? s.callsign ?? '').trim();
-      const typeCode = s.t ?? s.type ?? '';
-      const reg      = s.r ?? s.registration ?? '';
 
-      newMap.set(hex, { hex, lat, lon, altFt, altM, gs, track, callsign, typeCode, reg, onGround });
+      // Exaggerate altitude for visible 3D height; guarantee a minimum lift
+      const rawAltM     = (altFt ?? 15000) * 0.3048;
+      const displayAltM = onGround ? 0 : Math.max(rawAltM * ALT_EXAG, 4000);
+
+      const gs       = s.gs      ?? s.velocity    ?? null;
+      const track    = s.track   ?? s.true_track  ?? null;
+      const callsign = (s.flight ?? s.callsign    ?? '').trim();
+      const typeCode = s.t       ?? s.type        ?? '';
+      const reg      = s.r       ?? s.registration ?? '';
+      const mil      = !!s.mil;
+
+      newMap.set(hex, { hex, lat, lon, altFt, displayAltM, gs, track,
+                        callsign, typeCode, reg, mil, onGround });
     }
 
-    // remove departed
+    // Remove departed aircraft
     for (const [hex, grp] of meshMap) {
       if (!newMap.has(hex)) {
         scene.remove(grp);
@@ -440,33 +642,40 @@ async function fetchAndUpdate() {
       }
     }
 
-    // add / update
+    // Add / reposition aircraft
     for (const [hex, d] of newMap) {
       if (d.onGround) {
-        // remove airborne mesh if landed
         if (meshMap.has(hex)) { scene.remove(meshMap.get(hex)); meshMap.delete(hex); }
         continue;
       }
+
       let grp = meshMap.get(hex);
       if (!grp) {
         const kind = classify(d.typeCode, d.gs, d.altFt);
-        grp = kind === 'heli' ? buildHelicopter()
-            : kind === 'prop' ? buildTurboprop()
-            :                    buildJet();
+        if (d.mil) {
+          grp = kind === 'heli' ? buildHelicopter(MAT_MIL_H) : buildFighter(MAT_MIL);
+        } else {
+          grp = kind === 'heli' ? buildHelicopter(MAT_HELI)
+              : kind === 'prop' ? buildTurboprop(MAT_PROP)
+              :                   buildJet(MAT_JET);
+        }
         grp.userData.hex = hex;
         scene.add(grp);
         meshMap.set(hex, grp);
       }
-      placeGroup(grp, d.lon, d.lat, d.altM, d.track ?? 0);
+
+      placeGroup(grp, d.lon, d.lat, d.displayAltM, d.track ?? 0);
     }
 
     flightMap = newMap;
 
-    const n = [...newMap.values()].filter(d => !d.onGround).length;
-    document.getElementById('hdr-count').textContent = n.toLocaleString();
+    const civCount = [...newMap.values()].filter(d => !d.onGround && !d.mil).length;
+    const milCount = [...newMap.values()].filter(d => !d.onGround &&  d.mil).length;
+    document.getElementById('hdr-count').textContent = civCount.toLocaleString();
+    document.getElementById('hdr-mil').textContent   = milCount.toLocaleString();
     document.getElementById('hdr-time').textContent  =
-      new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-    setStatus('', `${n.toLocaleString()} aircraft · refreshes every 15 s`);
+      new Date().toLocaleTimeString([], { hour:'2-digit', minute:'2-digit', second:'2-digit' });
+    setStatus('', `${civCount + milCount} aircraft · ${milCount} military · auto-refresh 15 s`);
 
   } catch (e) {
     setStatus('err', 'Could not reach server — retrying in 15 s');
@@ -491,7 +700,7 @@ document.querySelectorAll('.reg-btn').forEach(btn => {
   });
 });
 
-// ── Tilt & zoom controls ───────────────────────────────────────
+// ── Camera controls ────────────────────────────────────────────
 document.getElementById('btn-tilt-up').addEventListener('click', () =>
   map.easeTo({ pitch: Math.min(map.getPitch() + 10, 85), duration: 300 }));
 document.getElementById('btn-tilt-down').addEventListener('click', () =>
@@ -500,7 +709,6 @@ document.getElementById('btn-zoom-in').addEventListener('click', () =>
   map.easeTo({ zoom: map.getZoom() + 0.8, duration: 300 }));
 document.getElementById('btn-zoom-out').addEventListener('click', () =>
   map.easeTo({ zoom: map.getZoom() - 0.8, duration: 300 }));
-
 document.getElementById('info-close').addEventListener('click', () =>
   document.getElementById('info-panel').classList.remove('open'));
 </script>
