@@ -494,7 +494,6 @@ const threeLayer = (() => {
       // For each aircraft: camera = mercatorMatrix × T × Rz × S
       // Model sits at origin; camera encodes its position + heading.
       M4.fromArray(mercatorMatrix);
-      threeRenderer.resetState(); // sync Three.js state with GL after MapLibre draw
 
       for (const [, d] of flightMap) {
         if (d.onGround) continue;
@@ -511,6 +510,8 @@ const threeLayer = (() => {
 
         // camera = mercatorMatrix × (T × Rz × S)
         cam.projectionMatrix.copy(M4).multiply(Lt).multiply(Rz).multiply(Sc);
+        // resetState before each draw so Three.js re-syncs with MapLibre's GL state
+        threeRenderer.resetState();
         threeRenderer.render(sc, cam);
       }
 

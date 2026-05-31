@@ -94,7 +94,10 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                                 lamin, lomin, lamax, lomax = bbox
                                 if not (lamin <= lat_a <= lamax and lomin <= lon_a <= lomax):
                                     continue
-                            if key not in seen:
+                            # Military version always wins: an aircraft seen on
+                            # the civil endpoint first (without mil=True) must
+                            # not block the mil endpoint from tagging it later.
+                            if key not in seen or (is_mil and not seen[key].get("mil")):
                                 seen[key] = a
                     except Exception:
                         pass
