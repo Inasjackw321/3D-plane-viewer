@@ -15,13 +15,13 @@
 
     #labels { position: fixed; inset: 0; pointer-events: none; z-index: 5; }
     .lbl {
-      position: absolute; transform: translate(-50%, -180%);
-      background: rgba(4,8,20,.88); border: 1px solid rgba(255,136,0,.5);
+      position: absolute; transform: translate(-50%, -170%);
+      background: rgba(4,8,20,.88); border: 1px solid rgba(255,136,0,.55);
       border-radius: 5px; padding: 2px 8px;
       font-size: 10px; font-weight: 700; color: #ffaa44;
       white-space: nowrap; pointer-events: none;
     }
-    .lbl.mil { border-color: rgba(80,255,120,.6); color: #66ff99; }
+    .lbl.mil { border-color: rgba(60,220,100,.65); color: #55ee88; }
 
     #header {
       position: fixed; top: 14px; left: 50%; transform: translateX(-50%);
@@ -37,18 +37,18 @@
     .hdiv { width: 1px; height: 26px; background: rgba(255,255,255,.1); }
     .stat { display: flex; flex-direction: column; align-items: center; gap: 1px; }
     .stat-v { font-size: 17px; font-weight: 800; color: #ff6620; line-height: 1; }
-    .stat-v.mil-v { color: #44ff88; }
+    .stat-v.mv { color: #44ff88; }
     .stat-l { font-size: 9px; color: rgba(255,255,255,.38); text-transform: uppercase; letter-spacing: 1px; }
 
     #legend {
       position: fixed; top: 72px; left: 14px; z-index: 10;
-      display: flex; flex-direction: column; gap: 5px; pointer-events: none;
+      display: flex; flex-direction: column; gap: 4px; pointer-events: none;
     }
-    .leg-row { display: flex; align-items: center; gap: 7px;
-      background: rgba(4,8,20,.8); border-radius: 8px; padding: 4px 10px;
-      border: 1px solid rgba(255,255,255,.08); }
-    .leg-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
-    .leg-label { font-size: 10px; color: rgba(255,255,255,.6); font-weight: 600; }
+    .lr { display: flex; align-items: center; gap: 7px;
+      background: rgba(4,8,20,.82); border-radius: 7px; padding: 4px 10px;
+      border: 1px solid rgba(255,255,255,.07); }
+    .ld { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+    .ll { font-size: 10px; color: rgba(255,255,255,.58); font-weight: 600; }
 
     #regions {
       position: fixed; top: 72px; left: 50%; transform: translateX(-50%);
@@ -58,8 +58,7 @@
       background: rgba(4,8,20,.82); border: 1px solid rgba(80,160,255,.22);
       border-radius: 20px; padding: 5px 14px;
       font-size: 11px; font-weight: 600; color: rgba(255,255,255,.55);
-      cursor: pointer; backdrop-filter: blur(10px);
-      transition: all .15s;
+      cursor: pointer; backdrop-filter: blur(10px); transition: all .15s;
     }
     .reg-btn:hover  { color: #fff; border-color: rgba(255,136,0,.5); }
     .reg-btn.active { background: rgba(255,85,0,.28); border-color: #ff5500; color: #fff; }
@@ -71,7 +70,7 @@
       backdrop-filter: blur(14px); z-index: 10; display: none; pointer-events: all;
     }
     #info-panel.open { display: block; }
-    #info-panel.mil-panel { border-color: rgba(80,220,80,.45); }
+    #info-panel.mp   { border-color: rgba(60,200,80,.45); }
     #info-close { position: absolute; top: 8px; right: 10px;
       background: none; border: none; color: rgba(255,255,255,.3);
       cursor: pointer; font-size: 20px; line-height: 1; padding: 2px 5px; }
@@ -79,13 +78,13 @@
     .i-cs  { font-size: 21px; font-weight: 800; color: #fff; margin-bottom: 2px; }
     .i-sub { font-size: 11px; color: rgba(255,255,255,.4); margin-bottom: 10px; }
     .i-badge { display: inline-block; font-size: 9px; font-weight: 700;
-      background: rgba(80,220,80,.2); border: 1px solid rgba(80,220,80,.5);
+      background: rgba(60,200,80,.2); border: 1px solid rgba(60,200,80,.5);
       color: #88ee88; border-radius: 4px; padding: 1px 6px; margin-left: 6px; letter-spacing: 1px; }
     .i-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
     .i-cell label { display: block; font-size: 9px; color: rgba(255,255,255,.36);
       text-transform: uppercase; letter-spacing: .9px; margin-bottom: 2px; }
     .i-cell span { font-size: 13px; font-weight: 700; color: #ff8844; }
-    .i-cell span.mc { color: #88ee88; }
+    .i-cell span.mv { color: #88ee88; }
 
     #controls {
       position: fixed; right: 14px; bottom: 50px;
@@ -124,7 +123,6 @@
   </style>
 </head>
 <body>
-
 <div id="map"></div>
 <div id="labels"></div>
 <div id="splash"><div class="spin"></div><p>Loading satellite map…</p></div>
@@ -134,18 +132,18 @@
   <div class="hdiv"></div>
   <div class="stat"><div class="stat-v" id="hdr-count">—</div><div class="stat-l">Civil</div></div>
   <div class="hdiv"></div>
-  <div class="stat"><div class="stat-v mil-v" id="hdr-mil">—</div><div class="stat-l">Military</div></div>
+  <div class="stat"><div class="stat-v mv" id="hdr-mil">—</div><div class="stat-l">Military</div></div>
   <div class="hdiv"></div>
   <div class="stat"><div class="stat-v" id="hdr-time">—</div><div class="stat-l">Updated</div></div>
 </div>
 
 <div id="legend">
-  <div class="leg-row"><div class="leg-dot" style="background:#22ff66"></div><div class="leg-label">Fighter</div></div>
-  <div class="leg-row"><div class="leg-dot" style="background:#66bbff"></div><div class="leg-label">Tanker</div></div>
-  <div class="leg-row"><div class="leg-dot" style="background:#ffff44"></div><div class="leg-label">AWACS</div></div>
-  <div class="leg-row"><div class="leg-dot" style="background:#aa88ff"></div><div class="leg-label">Cargo</div></div>
-  <div class="leg-row"><div class="leg-dot" style="background:#44ffcc"></div><div class="leg-label">Mil. Heli</div></div>
-  <div class="leg-row"><div class="leg-dot" style="background:#ff8800"></div><div class="leg-label">Civil Jet</div></div>
+  <div class="lr"><div class="ld" style="background:#22ff66"></div><div class="ll">Fighter</div></div>
+  <div class="lr"><div class="ld" style="background:#55aaff"></div><div class="ll">Tanker</div></div>
+  <div class="lr"><div class="ld" style="background:#ffff44"></div><div class="ll">AWACS</div></div>
+  <div class="lr"><div class="ld" style="background:#aa88ff"></div><div class="ll">Cargo</div></div>
+  <div class="lr"><div class="ld" style="background:#44ffcc"></div><div class="ll">Mil. Heli</div></div>
+  <div class="lr"><div class="ld" style="background:#ff8800"></div><div class="ll">Civil</div></div>
 </div>
 
 <div id="regions">
@@ -169,10 +167,10 @@
 </div>
 
 <div id="controls">
-  <button class="ctl" id="btn-tilt-up"   title="Tilt up">▲</button>
-  <button class="ctl" id="btn-tilt-down" title="Tilt down">▼</button>
-  <button class="ctl" id="btn-zoom-in"   title="Zoom in">+</button>
-  <button class="ctl" id="btn-zoom-out"  title="Zoom out">−</button>
+  <button class="ctl" id="btn-tup"  title="Tilt up">▲</button>
+  <button class="ctl" id="btn-tdn"  title="Tilt down">▼</button>
+  <button class="ctl" id="btn-zin"  title="Zoom in">+</button>
+  <button class="ctl" id="btn-zout" title="Zoom out">−</button>
 </div>
 
 <div id="status-bar">
@@ -181,15 +179,13 @@
 </div>
 
 <script>
-// ─────────────────────────────────────────────────────────────
-// Constants
-// ─────────────────────────────────────────────────────────────
+// ── config ────────────────────────────────────────────────────
 const REFRESH_MS = 15000;
-// MODEL_M: 1 geometry unit = MODEL_M metres in display space.
-// At zoom 5 (Middle East view), 1 display-metre ≈ 1/2175 of a pixel,
-// so MODEL_M=8000 → 1 unit ≈ 3.7px.  Fuselage ~13 units ≈ 48px.
-const MODEL_M  = 8000;
-const ALT_EXAG = 6;   // vertical exaggeration so aircraft visibly float
+// MODEL_M: how many display-metres equal 1 geometry unit.
+// At zoom 5.5 / lat 27°, 1 unit ≈ 6.5 px.
+// Fuselage ~13 units → ~85 px, AWACS disc ~13 units diam → very visible.
+const MODEL_M  = 10000;
+const ALT_EXAG = 6;
 
 const REGION_VIEWS = {
   middle_east:   { center: [45,  27], zoom: 5.5, pitch: 72 },
@@ -199,522 +195,368 @@ const REGION_VIEWS = {
   global:        { center: [20,  25], zoom: 2.5, pitch: 55 },
 };
 
-// ─────────────────────────────────────────────────────────────
-// State
-// ─────────────────────────────────────────────────────────────
+// ── state ─────────────────────────────────────────────────────
 let currentRegion = 'middle_east';
-let flightMap = new Map();
-let meshMap   = new Map();
-let scene, threeRenderer, camera, map;
+let flightMap     = new Map(); // hex → {lat,lon,displayAltM,track,kind,...}
+let threeRenderer, map;
 
-// ─────────────────────────────────────────────────────────────
-// MapLibre
-// ─────────────────────────────────────────────────────────────
+// ── MapLibre ──────────────────────────────────────────────────
 map = new maplibregl.Map({
   container: 'map',
   style: {
     version: 8,
     sources: {
-      satellite: {
+      sat: {
         type: 'raster',
         tiles: ['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'],
-        tileSize: 256,
-        attribution: '© Esri',
+        tileSize: 256, attribution: '© Esri',
       },
     },
-    layers: [{ id: 'sat', type: 'raster', source: 'satellite' }],
+    layers: [{ id: 'sat', type: 'raster', source: 'sat' }],
   },
   center: REGION_VIEWS.middle_east.center,
   zoom:   REGION_VIEWS.middle_east.zoom,
   pitch:  REGION_VIEWS.middle_east.pitch,
-  antialias: true,
-  maxPitch: 85,
+  antialias: true, maxPitch: 85,
 });
-
 map.on('load', () => {
   document.getElementById('splash').classList.add('gone');
   map.addLayer(threeLayer);
   startFetching();
 });
 
-// ─────────────────────────────────────────────────────────────
-// Materials
-// depthTest:false + depthWrite:false = always rendered on top of
-// map tiles regardless of the depth buffer state left by MapLibre.
-// ─────────────────────────────────────────────────────────────
-function mkMat(color, emissive, ei = 0.55) {
-  return new THREE.MeshLambertMaterial({
-    color, emissive, emissiveIntensity: ei,
-    depthTest: false, depthWrite: false,
-  });
+// ── materials ─────────────────────────────────────────────────
+function mat(color, emissive, ei = 0.55) {
+  return new THREE.MeshLambertMaterial({ color, emissive, emissiveIntensity: ei,
+    depthTest: false, depthWrite: false });
 }
-
 const M = {
-  fighter:  mkMat(0x22ff66, 0x00aa33, 0.65),
-  tanker:   mkMat(0x55aaff, 0x1155aa, 0.55),
-  awacs:    mkMat(0xffee44, 0xcc8800, 0.55),
-  awacsDsk: mkMat(0xffff00, 0xffaa00, 0.85),
-  cargo:    mkMat(0xaa88ff, 0x5533aa, 0.50),
-  atkHeli:  mkMat(0x44ffcc, 0x009966, 0.65),
-  trnHeli:  mkMat(0x44ffaa, 0x008844, 0.60),
-  civJet:   mkMat(0xff8800, 0xff4400, 0.45),
-  civProp:  mkMat(0xffaa00, 0xff6600, 0.40),
-  civHeli:  mkMat(0xff6600, 0xff2200, 0.50),
+  fighter:  mat(0x22ff66, 0x00aa33, 0.65),
+  tanker:   mat(0x55aaff, 0x1166bb, 0.55),
+  awacs:    mat(0xffee44, 0xcc8800, 0.55),
+  awacsDsk: mat(0xffff00, 0xffaa00, 0.90),
+  cargo:    mat(0xaa88ff, 0x5533aa, 0.50),
+  atkHeli:  mat(0x44ffcc, 0x009966, 0.65),
+  trnHeli:  mat(0x44ffaa, 0x008844, 0.60),
+  civJet:   mat(0xff8800, 0xff4400, 0.45),
+  civProp:  mat(0xffaa00, 0xff6600, 0.40),
+  civHeli:  mat(0xff6600, 0xff2200, 0.50),
 };
 
-// ─────────────────────────────────────────────────────────────
-// Geometry helpers
-// ─────────────────────────────────────────────────────────────
-function mesh(geom, mat) {
-  const m = new THREE.Mesh(geom, mat);
-  m.frustumCulled = false;
-  return m;
-}
-
-// Add a mesh to group with optional position/rotation offsets
-function add(g, geom, mat, px=0, py=0, pz=0, rx=0, ry=0, rz=0) {
-  const m = mesh(geom, mat);
-  m.position.set(px, py, pz);
-  if (rx || ry || rz) m.rotation.set(rx, ry, rz);
-  g.add(m);
-  return m;
-}
-
-// Cylinder lying along local X axis (fuselage convention)
-function cylX(rTop, rBot, len, segs=10) {
-  const g = new THREE.CylinderGeometry(rTop, rBot, len, segs);
+// ── geometry helpers ──────────────────────────────────────────
+// Fuselage convention: nose → +X, wings span ±Z, up → +Y
+// cylX  = cylinder lying along X axis
+// coneX = cone with tip at +X  (nose)
+// coneMX= cone with tip at -X  (tail)
+function cylX(r1, r2, len, seg = 10) {
+  const g = new THREE.CylinderGeometry(r1, r2, len, seg);
   g.applyMatrix4(new THREE.Matrix4().makeRotationZ(Math.PI / 2));
   return g;
 }
-// Cone with tip pointing in +X
-function coneX(r, h, segs=10) {
-  const g = new THREE.ConeGeometry(r, h, segs);
+function coneX(r, h, seg = 10) {
+  const g = new THREE.ConeGeometry(r, h, seg);
   g.applyMatrix4(new THREE.Matrix4().makeRotationZ(-Math.PI / 2));
   return g;
 }
-// Cone with tip pointing in -X (tail taper)
-function coneMX(r, h, segs=10) {
-  const g = new THREE.ConeGeometry(r, h, segs);
+function coneMX(r, h, seg = 10) {
+  const g = new THREE.ConeGeometry(r, h, seg);
   g.applyMatrix4(new THREE.Matrix4().makeRotationZ(Math.PI / 2));
   return g;
 }
-
-// ─────────────────────────────────────────────────────────────
-// Model: Fighter jet  (F-16 / Eurofighter style)
-// Delta wings + long pointed nose + twin-tail + afterburner
-// ─────────────────────────────────────────────────────────────
-function buildFighter() {
+function addM(g, geom, mat, px=0, py=0, pz=0, rx=0, ry=0, rz=0) {
+  const m = new THREE.Mesh(geom, mat);
+  m.position.set(px, py, pz);
+  if (rx||ry||rz) m.rotation.set(rx, ry, rz);
+  m.frustumCulled = false;
+  g.add(m);
+}
+function grp() {
   const g = new THREE.Group();
-  const m = M.fighter;
+  g.frustumCulled = false;
+  return g;
+}
 
-  // Slim fuselage
-  add(g, cylX(0.50, 0.40, 13, 10), m);
-  // Long pointed nose
-  add(g, coneX(0.50, 5.5, 10), m, 9.25);
-  // Widened intake section (mid-body bulge)
-  add(g, cylX(0.62, 0.62, 3, 10), m, 2.5);
-  // Afterburner nozzle
-  add(g, coneMX(0.58, 2.5, 8), m, -7.75);
-
-  // Main delta wings (large swept panels)
-  add(g, new THREE.BoxGeometry(7.5, 0.18, 12), m, -0.5);
-  // Leading-edge root extensions (LERX)
-  add(g, new THREE.BoxGeometry(5, 0.15, 5), m,  3.5, 0,  4);
-  add(g, new THREE.BoxGeometry(5, 0.15, 5), m,  3.5, 0, -4);
-
-  // Canards (small forward fins)
-  add(g, new THREE.BoxGeometry(2.5, 0.13, 3.5), m, 4.5, 0,  2.8);
-  add(g, new THREE.BoxGeometry(2.5, 0.13, 3.5), m, 4.5, 0, -2.8);
-
+// ── Fighter (F-16 / Eurofighter) ──────────────────────────────
+// Delta wings · canards · twin canted tails · chin intakes
+function buildFighter() {
+  const g = grp(), m = M.fighter;
+  addM(g, cylX(0.50, 0.40, 13, 10), m);                          // fuselage
+  addM(g, coneX(0.50, 5.5, 10), m, 9.25);                        // long pointed nose
+  addM(g, cylX(0.62, 0.62, 3, 10),  m, 2.5);                     // intake bulge
+  addM(g, coneMX(0.58, 2.5, 8),     m, -7.75);                   // afterburner
+  addM(g, new THREE.BoxGeometry(7.5, 0.18, 12), m, -0.5);        // delta wings
+  addM(g, new THREE.BoxGeometry(5, 0.15, 5),    m,  3.5, 0,  4); // LERX right
+  addM(g, new THREE.BoxGeometry(5, 0.15, 5),    m,  3.5, 0, -4); // LERX left
+  addM(g, new THREE.BoxGeometry(2.5, 0.13, 3.5), m, 4.5, 0,  2.8); // canard R
+  addM(g, new THREE.BoxGeometry(2.5, 0.13, 3.5), m, 4.5, 0, -2.8); // canard L
   // Twin canted vertical tails
   const tf = new THREE.BoxGeometry(3.8, 2.8, 0.22);
-  const tR = mesh(tf, m); tR.position.set(-5, 1.5,  1.6); tR.rotation.set(0, 0.2, 0); g.add(tR);
-  const tL = mesh(tf, m); tL.position.set(-5, 1.5, -1.6); tL.rotation.set(0,-0.2, 0); g.add(tL);
-
-  // Engine intakes (chin-mounted)
-  add(g, cylX(0.38, 0.42, 2.2, 8), m, 4.5, -0.45,  0.6);
-  add(g, cylX(0.38, 0.42, 2.2, 8), m, 4.5, -0.45, -0.6);
-
-  g.frustumCulled = false;
+  const tR = new THREE.Mesh(tf, m); tR.frustumCulled = false;
+  tR.position.set(-5, 1.5,  1.6); tR.rotation.y = 0.2; g.add(tR);
+  const tL = new THREE.Mesh(tf, m); tL.frustumCulled = false;
+  tL.position.set(-5, 1.5, -1.6); tL.rotation.y =-0.2; g.add(tL);
+  addM(g, cylX(0.38, 0.42, 2.2, 8), m, 4.5, -0.45,  0.6); // chin intake R
+  addM(g, cylX(0.38, 0.42, 2.2, 8), m, 4.5, -0.45, -0.6); // chin intake L
   return g;
 }
 
-// ─────────────────────────────────────────────────────────────
-// Model: Tanker  (KC-135 / A330 MRTT style)
-// 4 engines, long fuselage, refuelling boom under tail
-// ─────────────────────────────────────────────────────────────
+// ── Tanker (KC-135 / A330 MRTT) ──────────────────────────────
+// 4 pod engines · swept wings · refuelling boom under tail
 function buildTanker() {
-  const g = new THREE.Group();
-  const m = M.tanker;
-
-  add(g, cylX(1.10, 0.92, 18, 12), m);
-  add(g, coneX(1.10, 3.5, 12), m, 10.75);
-  add(g, coneMX(0.92, 3.0, 12), m, -10.5);
-
-  // Swept wings
-  add(g, new THREE.BoxGeometry(5.5, 0.20, 20), m, 0.5);
-
-  // 4 pod engines under wings
-  [[-1.0, -4.0], [-2.0, -9.5], [-1.0, 4.0], [-2.0, 9.5]].forEach(([px, pz]) => {
-    add(g, cylX(0.50, 0.42, 3.0, 10), m, px, -1.1, pz);
-    // intake ring
-    add(g, new THREE.TorusGeometry(0.50, 0.09, 6, 14), m, px + 1.55, -1.1, pz, 0, Math.PI/2, 0);
-  });
-
-  // H-stabilizer
-  add(g, new THREE.BoxGeometry(2.5, 0.18, 9), m, -11.5);
-  // V-fin
-  add(g, new THREE.BoxGeometry(3.2, 3.2, 0.22), m, -11.5, 1.6);
-
-  // Refuelling boom (angled down-aft under tail — KC-135 distinctive)
-  const boomG = new THREE.Group();
-  add(boomG, cylX(0.10, 0.07, 5.5, 6), boomG._mat = m);
-  add(boomG, coneX(0.07, 1.2, 5), m, 3.35);
-  boomG.position.set(-12.8, -1.2, 0);
-  boomG.rotation.z = 0.45; // angled downward
-  boomG.frustumCulled = false;
-  boomG.traverse(o => o.frustumCulled = false);
-  g.add(boomG);
-
-  g.frustumCulled = false;
-  return g;
-}
-
-// ─────────────────────────────────────────────────────────────
-// Model: AWACS  (E-3 Sentry / E-7 Wedgetail style)
-// Commercial jet body + ENORMOUS rotating disc radome on pylon
-// ─────────────────────────────────────────────────────────────
-function buildAWACS() {
-  const g = new THREE.Group();
-  const m = M.awacs;
-  const md = M.awacsDsk;
-
-  // Fuselage (707-like)
-  add(g, cylX(1.10, 0.92, 17, 12), m);
-  add(g, coneX(1.10, 3.5, 12), m, 10.25);
-  add(g, coneMX(0.92, 3.0, 12), m, -10.5);
-
-  // Wings
-  add(g, new THREE.BoxGeometry(5.2, 0.20, 19), m, 0.5);
-
+  const g = grp(), m = M.tanker;
+  addM(g, cylX(1.10, 0.92, 18, 12), m);
+  addM(g, coneX(1.10, 3.5, 12),     m, 10.75);
+  addM(g, coneMX(0.92, 3.0, 12),    m, -10.5);
+  addM(g, new THREE.BoxGeometry(5.5, 0.20, 20), m, 0.5); // wings
   // 4 engines
-  [[-0.8,-3.5],[-2.0,-8.5],[-0.8,3.5],[-2.0,8.5]].forEach(([px,pz]) => {
-    add(g, cylX(0.48, 0.40, 2.8, 10), m, px, -1.1, pz);
+  [[-1.0,-4.0],[-2.0,-9.5],[-1.0,4.0],[-2.0,9.5]].forEach(([px,pz]) => {
+    addM(g, cylX(0.50, 0.42, 3.0, 10), m, px, -1.1, pz);
+    addM(g, new THREE.TorusGeometry(0.50, 0.09, 6, 14), m, px+1.55, -1.1, pz, 0, Math.PI/2);
   });
-
-  // Conventional tail
-  add(g, new THREE.BoxGeometry(2.5, 0.18, 9), m, -11.5);
-  add(g, new THREE.BoxGeometry(3.2, 3.2, 0.22), m, -11.5, 1.6);
-
-  // ── ROTODOME (most distinctive AWACS feature) ──
-  // Pylon struts
-  add(g, cylX(0.22, 0.22, 2.5, 8), m, 1.5, 2.5, 0);
-  // Huge rotating disc — yellow/gold to stand out
-  add(g, new THREE.CylinderGeometry(6.5, 6.5, 0.85, 32), md, 1.5, 3.85, 0);
-  // Disc rim bevel top & bottom
-  add(g, new THREE.CylinderGeometry(6.5, 6.0, 0.2, 32), md, 1.5, 4.35, 0);
-  add(g, new THREE.CylinderGeometry(6.5, 6.0, 0.2, 32), md, 1.5, 3.3, 0);
-  // IFF antenna on disc edge
-  add(g, new THREE.BoxGeometry(0.2, 0.5, 0.8), md, 8.0, 3.9, 0);
-  add(g, new THREE.BoxGeometry(0.2, 0.5, 0.8), md, -5.0, 3.9, 0);
-
-  g.frustumCulled = false;
+  addM(g, new THREE.BoxGeometry(2.5, 0.18, 9), m, -11.5);        // H-stab
+  addM(g, new THREE.BoxGeometry(3.2, 3.2, 0.22), m, -11.5, 1.6); // V-fin
+  // Refuelling boom (angled down from tail)
+  addM(g, cylX(0.10, 0.07, 5.5, 6), m, -14.0, -1.8, 0, 0, 0, 0.45);
+  addM(g, coneX(0.07, 1.2, 5),      m, -16.5, -2.6, 0, 0, 0, 0.45);
   return g;
 }
 
-// ─────────────────────────────────────────────────────────────
-// Model: Cargo  (C-130 Hercules / C-17 style)
-// T-tail, HIGH wings, 4 turboprops, boxy fuselage, upswept rear
-// ─────────────────────────────────────────────────────────────
+// ── AWACS (E-3 Sentry / E-7 Wedgetail) ───────────────────────
+// 707 body + GIANT gold rotodome disc on pylon
+function buildAWACS() {
+  const g = grp(), m = M.awacs, md = M.awacsDsk;
+  addM(g, cylX(1.10, 0.92, 17, 12), m);
+  addM(g, coneX(1.10, 3.5, 12),     m, 10.25);
+  addM(g, coneMX(0.92, 3.0, 12),    m, -10.5);
+  addM(g, new THREE.BoxGeometry(5.2, 0.20, 19), m, 0.5); // wings
+  [[-0.8,-3.5],[-2.0,-8.5],[-0.8,3.5],[-2.0,8.5]].forEach(([px,pz]) =>
+    addM(g, cylX(0.48, 0.40, 2.8, 10), m, px, -1.1, pz));
+  addM(g, new THREE.BoxGeometry(2.5, 0.18, 9),  m, -11.5);
+  addM(g, new THREE.BoxGeometry(3.2, 3.2, 0.22), m, -11.5, 1.6);
+  // Pylon
+  addM(g, cylX(0.22, 0.22, 2.5, 8), m, 1.5, 2.5);
+  // ★ Giant rotodome disc (most distinctive feature — bright gold)
+  addM(g, new THREE.CylinderGeometry(7.0, 7.0, 0.90, 36), md, 1.5, 3.85);
+  addM(g, new THREE.CylinderGeometry(7.0, 6.4, 0.22, 36), md, 1.5, 4.40);
+  addM(g, new THREE.CylinderGeometry(7.0, 6.4, 0.22, 36), md, 1.5, 3.30);
+  addM(g, new THREE.BoxGeometry(0.22, 0.55, 0.9), md,  8.5, 3.9);
+  addM(g, new THREE.BoxGeometry(0.22, 0.55, 0.9), md, -5.5, 3.9);
+  return g;
+}
+
+// ── Cargo (C-130 Hercules / C-17) ────────────────────────────
+// T-tail · high wing · 4 turboprops · boxy fuselage · cargo ramp
 function buildCargo() {
-  const g = new THREE.Group();
-  const m = M.cargo;
-
-  // Boxy fuselage (not cylinder — rectangular cross section)
-  add(g, new THREE.BoxGeometry(18, 2.5, 3.0), m);
-  // Nose rounded
-  add(g, new THREE.SphereGeometry(1.5, 10, 8), m, 9.0, 0, 0, 0,0,0, 1.0, 0.85, 1.0);
-  // Upswept rear (cargo ramp area)
-  add(g, new THREE.BoxGeometry(4.5, 1.5, 3.0), m, -11.0, 0.7, 0, 0, 0, -0.3);
-
-  // High-mounted wings (above fuselage)
-  add(g, new THREE.BoxGeometry(5.5, 0.22, 20), m, 0.5, 1.25);
-
-  // 4 turboprop engines + prop discs
-  [[-3.0], [-8.0], [3.0], [8.0]].forEach(([pz]) => {
-    const px = Math.abs(pz) < 5 ? 0.5 : -0.5; // inner vs outer swept
-    add(g, cylX(0.52, 0.42, 2.8, 10), m, px, 1.0, pz);
-    // Prop disc
-    add(g, new THREE.CylinderGeometry(2.2, 2.2, 0.12, 18), m, px + 1.6, 1.0, pz, 0, 0, Math.PI/2);
-    // Hub
-    add(g, new THREE.SphereGeometry(0.28, 8, 6), m, px + 2.2, 1.0, pz);
+  const g = grp(), m = M.cargo;
+  addM(g, new THREE.BoxGeometry(18, 2.5, 3.0), m);                          // boxy body
+  addM(g, new THREE.SphereGeometry(1.5, 10, 8), m, 9.0,0,0, 0,0,0, 1,0.85,1); // nose
+  addM(g, new THREE.BoxGeometry(4.5, 1.5, 3.0), m, -11.0, 0.7, 0, 0,0,-0.3);  // rear ramp
+  addM(g, new THREE.BoxGeometry(5.5, 0.22, 20), m, 0.5, 1.25);               // HIGH wing
+  [[-3],[-8],[3],[8]].forEach(([pz]) => {
+    const px = Math.abs(pz) < 5 ? 0.5 : -0.5;
+    addM(g, cylX(0.52, 0.42, 2.8, 10), m, px, 1.0, pz);
+    addM(g, new THREE.CylinderGeometry(2.2, 2.2, 0.12, 18), m, px+1.6, 1.0, pz, 0,0,Math.PI/2);
+    addM(g, new THREE.SphereGeometry(0.28, 8, 6), m, px+2.2, 1.0, pz);
   });
-
-  // T-TAIL: vertical fin tall
-  add(g, new THREE.BoxGeometry(4.0, 4.5, 0.25), m, -11.0, 2.5);
-  // T-tail horizontal stab on top
-  add(g, new THREE.BoxGeometry(2.5, 0.20, 9), m, -11.0, 4.6);
-
-  g.frustumCulled = false;
+  addM(g, new THREE.BoxGeometry(4.0, 4.5, 0.25), m, -11.0, 2.5);  // T-tail fin
+  addM(g, new THREE.BoxGeometry(2.5, 0.20, 9),   m, -11.0, 4.6);  // top stab
   return g;
 }
 
-// ─────────────────────────────────────────────────────────────
-// Model: Attack Helicopter  (AH-64 Apache style)
-// Narrow tandem body, stub wings, 30mm cannon nose, large rotor
-// ─────────────────────────────────────────────────────────────
+// ── Attack Helicopter (AH-64 Apache) ─────────────────────────
+// Narrow tandem body · 30mm cannon · stub wings · large rotor
 function buildAttackHeli() {
-  const g = new THREE.Group();
-  const m = M.atkHeli;
-
-  // Narrow tandem body
-  add(g, cylX(0.55, 0.42, 9.5, 8), m);
-  // Cockpit / canopy (stepped — gunner front, pilot rear)
-  add(g, new THREE.SphereGeometry(0.72, 8, 6), m, 3.5, 0.1, 0, 0,0,0, 1.4, 1.0, 0.9);
-  // 30mm cannon nose
-  add(g, coneX(0.22, 2.5, 8), m, 6.0, -0.3);
-  add(g, cylX(0.12, 0.12, 2.5, 6), m, 6.0, -0.3); // cannon barrel
-
-  // Tail boom (long, thin)
-  add(g, cylX(0.20, 0.12, 8, 6), m, -8.5, 0.5);
-  // Tail rotor (small vertical disc)
-  add(g, new THREE.CylinderGeometry(1.4, 1.4, 0.10, 12), m, -12.5, 0.5, 0.5, Math.PI/2);
-
-  // Stub wings with weapon pylons
-  add(g, new THREE.BoxGeometry(1.5, 0.18, 5.5), m, 0, 0, 0);
-  // Pylon tips
-  add(g, new THREE.BoxGeometry(0.7, 0.35, 0.4), m, 0, -0.3,  3.2);
-  add(g, new THREE.BoxGeometry(0.7, 0.35, 0.4), m, 0, -0.3, -3.2);
-
-  // Main rotor (large disc, slightly forward)
-  add(g, new THREE.CylinderGeometry(6.0, 6.0, 0.10, 22), m, 1.0, 1.4);
-  // Rotor hub
-  add(g, cylX(0.35, 0.35, 0.9, 8), m, 1.0, 1.5);
-
-  // Skids
-  add(g, cylX(0.09, 0.09, 6, 5), m, 0, -1.2,  1.0);
-  add(g, cylX(0.09, 0.09, 6, 5), m, 0, -1.2, -1.0);
-
-  g.frustumCulled = false;
+  const g = grp(), m = M.atkHeli;
+  addM(g, cylX(0.55, 0.42, 9.5, 8), m);
+  addM(g, new THREE.SphereGeometry(0.72, 8, 6), m, 3.5, 0.1, 0, 0,0,0, 1.4,1,0.9); // cockpit
+  addM(g, coneX(0.22, 2.5, 8), m, 6.0, -0.3);                   // 30mm cannon
+  addM(g, cylX(0.10, 0.10, 2.5, 6), m, 6.2, -0.3);              // cannon barrel
+  addM(g, cylX(0.20, 0.12, 8, 6),  m, -8.5, 0.5);               // tail boom
+  addM(g, new THREE.CylinderGeometry(1.4, 1.4, 0.10, 14), m, -12.5, 0.5, 0.5, Math.PI/2); // tail rotor
+  addM(g, new THREE.BoxGeometry(1.5, 0.18, 5.5), m);             // stub wings
+  addM(g, new THREE.BoxGeometry(0.7, 0.35, 0.4), m, 0, -0.3,  3.2); // pylon R
+  addM(g, new THREE.BoxGeometry(0.7, 0.35, 0.4), m, 0, -0.3, -3.2); // pylon L
+  addM(g, new THREE.CylinderGeometry(6.0, 6.0, 0.10, 24), m, 1.0, 1.4); // main rotor
+  addM(g, cylX(0.35, 0.35, 0.9, 8), m, 1.0, 1.5);               // rotor hub
+  addM(g, cylX(0.09, 0.09, 6, 5), m, 0, -1.2,  1.0);            // skid R
+  addM(g, cylX(0.09, 0.09, 6, 5), m, 0, -1.2, -1.0);            // skid L
   return g;
 }
 
-// ─────────────────────────────────────────────────────────────
-// Model: Chinook / Transport Helicopter  (CH-47 style)
-// Tandem double rotors — the defining feature
-// ─────────────────────────────────────────────────────────────
+// ── Chinook (CH-47 transport helicopter) ──────────────────────
+// Banana fuselage · TWIN tandem rotor discs (unmistakable)
 function buildChinook() {
-  const g = new THREE.Group();
-  const m = M.trnHeli;
-
-  // Banana fuselage (slightly curved via scale trick)
-  add(g, cylX(1.20, 1.00, 16, 10), m);
-  // Rounded nose
-  add(g, new THREE.SphereGeometry(1.2, 8, 6), m, 8.0, 0, 0, 0,0,0, 1.2, 0.88, 1.0);
-  // Upswept tail
-  add(g, cylX(0.55, 0.35, 5, 8), m, -10.0, 1.5, 0, 0, 0, -0.35);
-
-  // FRONT ROTOR DISC (large)
-  add(g, new THREE.CylinderGeometry(6.2, 6.2, 0.12, 24), m, 5.5, 2.0);
-  add(g, cylX(0.38, 0.38, 0.9, 8), m, 5.5, 2.1);
-  // REAR ROTOR DISC (large — tandem = most distinctive feature)
-  add(g, new THREE.CylinderGeometry(6.2, 6.2, 0.12, 24), m, -5.5, 2.4);
-  add(g, cylX(0.38, 0.38, 0.9, 8), m, -5.5, 2.5);
-
-  // Sponsons (side fuel pods)
-  add(g, cylX(0.45, 0.38, 7.0, 7), m, 0, -0.9,  1.4);
-  add(g, cylX(0.45, 0.38, 7.0, 7), m, 0, -0.9, -1.4);
-
-  // Rear loading ramp (flat box at tail)
-  add(g, new THREE.BoxGeometry(2.5, 0.25, 2.4), m, -9.0, -0.5);
-
-  // Landing gear
-  add(g, cylX(0.1, 0.1, 8, 5), m, 0, -1.5,  1.3);
-  add(g, cylX(0.1, 0.1, 8, 5), m, 0, -1.5, -1.3);
-
-  g.frustumCulled = false;
+  const g = grp(), m = M.trnHeli;
+  addM(g, cylX(1.20, 1.00, 16, 10), m);
+  addM(g, new THREE.SphereGeometry(1.2, 8, 6), m, 8.0, 0, 0, 0,0,0, 1.2,0.88,1); // nose
+  addM(g, cylX(0.55, 0.35, 5, 8), m, -10.0, 1.5, 0, 0, 0, -0.35); // upswept tail
+  addM(g, new THREE.CylinderGeometry(6.5, 6.5, 0.12, 26), m,  5.5, 2.0); // FRONT rotor
+  addM(g, new THREE.CylinderGeometry(6.5, 6.5, 0.12, 26), m, -5.5, 2.4); // REAR  rotor
+  addM(g, cylX(0.38, 0.38, 0.9, 8), m,  5.5, 2.1); // front hub
+  addM(g, cylX(0.38, 0.38, 0.9, 8), m, -5.5, 2.5); // rear hub
+  addM(g, cylX(0.45, 0.38, 7.0, 7), m, 0, -0.9,  1.4); // sponson R
+  addM(g, cylX(0.45, 0.38, 7.0, 7), m, 0, -0.9, -1.4); // sponson L
+  addM(g, new THREE.BoxGeometry(2.5, 0.25, 2.4), m, -9.0, -0.5); // rear ramp
+  addM(g, cylX(0.10, 0.10, 8, 5), m, 0, -1.5,  1.3); // gear R
+  addM(g, cylX(0.10, 0.10, 8, 5), m, 0, -1.5, -1.3); // gear L
   return g;
 }
 
-// ─────────────────────────────────────────────────────────────
-// Civil models (simplified)
-// ─────────────────────────────────────────────────────────────
+// ── Civil airliner ─────────────────────────────────────────────
 function buildCivJet() {
-  const g = new THREE.Group();
-  const m = M.civJet;
-  add(g, cylX(0.90, 0.75, 13, 12), m);
-  add(g, coneX(0.90, 3.5, 12), m, 8.25);
-  add(g, coneMX(0.75, 2.5, 12), m, -7.75);
-  add(g, new THREE.BoxGeometry(5, 0.20, 20), m, 0.5);           // wings
-  // winglets
-  add(g, new THREE.BoxGeometry(0.22, 2.0, 0.6), m, 0, 1.1,  10.4);
-  add(g, new THREE.BoxGeometry(0.22, 2.0, 0.6), m, 0, 1.1, -10.4);
-  // 2 engines
-  add(g, cylX(0.58, 0.50, 3.0, 10), m, 0.5, -1.1,  5.5);
-  add(g, cylX(0.58, 0.50, 3.0, 10), m, 0.5, -1.1, -5.5);
-  add(g, new THREE.BoxGeometry(2.5, 0.18, 9), m, -9.0);          // h-stab
-  add(g, new THREE.BoxGeometry(3.0, 3.2, 0.22), m, -9.0, 1.6);  // v-fin
-  g.frustumCulled = false;
+  const g = grp(), m = M.civJet;
+  addM(g, cylX(0.90, 0.75, 13, 12), m);
+  addM(g, coneX(0.90, 3.5, 12), m, 8.25);
+  addM(g, coneMX(0.75, 2.5, 12), m, -7.75);
+  addM(g, new THREE.BoxGeometry(5, 0.20, 20), m, 0.5);           // wings
+  addM(g, new THREE.BoxGeometry(0.22, 2.0, 0.6), m, 0, 1.1,  10.4); // winglet R
+  addM(g, new THREE.BoxGeometry(0.22, 2.0, 0.6), m, 0, 1.1, -10.4); // winglet L
+  addM(g, cylX(0.58, 0.50, 3.0, 10), m, 0.5, -1.1,  5.5); // engine R
+  addM(g, cylX(0.58, 0.50, 3.0, 10), m, 0.5, -1.1, -5.5); // engine L
+  addM(g, new THREE.BoxGeometry(2.5, 0.18, 9),  m, -9.0);        // H-stab
+  addM(g, new THREE.BoxGeometry(3.0, 3.2, 0.22), m, -9.0, 1.6); // V-fin
   return g;
 }
 
 function buildCivProp() {
-  const g = new THREE.Group();
-  const m = M.civProp;
-  add(g, cylX(0.78, 0.62, 10, 10), m);
-  add(g, coneX(0.78, 2.2, 10), m, 7.1);
-  add(g, coneMX(0.62, 2.0, 10), m, -7.1);
-  add(g, new THREE.BoxGeometry(4, 0.20, 15), m, 0.5, 0.9);      // high wing
-  add(g, new THREE.CylinderGeometry(2.2, 2.2, 0.12, 18), m, 8.2, 0.9, 0, 0,0,Math.PI/2); // prop
-  add(g, new THREE.BoxGeometry(2.0, 0.16, 7), m, -8.0);
-  add(g, new THREE.BoxGeometry(2.5, 2.5, 0.20), m, -8.0, 1.2);
-  g.frustumCulled = false;
+  const g = grp(), m = M.civProp;
+  addM(g, cylX(0.78, 0.62, 10, 10), m);
+  addM(g, coneX(0.78, 2.2, 10), m, 7.1);
+  addM(g, coneMX(0.62, 2.0, 10), m, -7.1);
+  addM(g, new THREE.BoxGeometry(4, 0.20, 15), m, 0.5, 0.9); // high wing
+  addM(g, new THREE.CylinderGeometry(2.2, 2.2, 0.12, 18), m, 8.2, 0.9, 0, 0,0,Math.PI/2); // prop disk
+  addM(g, new THREE.SphereGeometry(0.28, 8, 6), m, 8.8, 0.9);
+  addM(g, new THREE.BoxGeometry(2.0, 0.16, 7), m, -8.0);
+  addM(g, new THREE.BoxGeometry(2.5, 2.5, 0.20), m, -8.0, 1.2);
   return g;
 }
 
 function buildCivHeli() {
-  const g = new THREE.Group();
-  const m = M.civHeli;
-  add(g, new THREE.SphereGeometry(1.55, 8, 6), m, 0,0,0, 0,0,0, 1.7,1.0,1.1);
-  add(g, new THREE.SphereGeometry(1.0, 8, 6), m, 2.0,0,0, 0,0,0, 1.2,0.85,1.0);
-  add(g, cylX(0.25, 0.15, 8, 6), m, -6.5, 0.3);
-  add(g, new THREE.CylinderGeometry(5.5, 5.5, 0.10, 20), m, 0, 1.8);
-  add(g, new THREE.CylinderGeometry(1.2, 1.2, 0.09, 12), m, -10.5, 0.5, 0.5, Math.PI/2);
-  g.frustumCulled = false;
+  const g = grp(), m = M.civHeli;
+  addM(g, new THREE.SphereGeometry(1.55, 8, 6), m, 0,0,0, 0,0,0, 1.7,1,1.1); // body
+  addM(g, new THREE.SphereGeometry(1.0, 8, 6),  m, 2.0,0,0, 0,0,0, 1.2,0.85,1); // cockpit
+  addM(g, cylX(0.25, 0.15, 8, 6), m, -6.5, 0.3);             // tail boom
+  addM(g, new THREE.CylinderGeometry(5.5, 5.5, 0.10, 22), m, 0, 1.8); // main rotor
+  addM(g, new THREE.CylinderGeometry(1.2, 1.2, 0.09, 12), m, -10.5, 0.5, 0.5, Math.PI/2); // tail rotor
   return g;
 }
 
-// ─────────────────────────────────────────────────────────────
-// Classification
-// ─────────────────────────────────────────────────────────────
-function classifyMil(typeCode, callsign, gs) {
-  const t  = (typeCode  || '').toUpperCase();
-  const cs = (callsign  || '').toUpperCase();
+// ── Three.js custom layer ─────────────────────────────────────
+// KEY PATTERN: model at scene origin; camera = mercatorMatrix × aircraft_transform
+// This is the official MapLibre approach — proven to work.
+const threeLayer = (() => {
+  let cam, tpl;
+  // Pre-allocated matrices to avoid GC pressure in render loop
+  const M4 = new THREE.Matrix4();
+  const Lt = new THREE.Matrix4();
+  const Rz = new THREE.Matrix4();
+  const Sc = new THREE.Matrix4();
 
-  // AWACS / AEW
-  if (/^(E3T|E3CF|E3D|E7W|B701|B702|B703|B707|WJET|P3C|E2C|E2D|S2C)/.test(t)) return 'awacs';
-  if (/SNTRY|DISCO|ROOK|MAGIC|SWORD|AWACS/.test(cs)) return 'awacs';
+  function mkScene(model) {
+    const sc = new THREE.Scene();
+    sc.add(new THREE.AmbientLight(0xffffff, 0.85));
+    const sun = new THREE.DirectionalLight(0xfff0cc, 0.95);
+    sun.position.set(1, 2, 0.8);
+    sc.add(sun);
+    model.traverse(o => { o.frustumCulled = false; });
+    sc.add(model);
+    return sc;
+  }
 
-  // Tanker
-  if (/^(KC13|KC10|KC46|K35R|A332|A342|B762|B764|IL78|VC10|L382|DC10)/.test(t)) return 'tanker';
-  if (/^(RCH|REACH|MAKO|IRON|OILER|SHELL)/.test(cs)) return 'tanker';
+  return {
+    id: '3d-aircraft', type: 'custom', renderingMode: '3d',
 
-  // Cargo / heavy transport
-  if (/^(C130|C17|C5|C27|C295|A400|IL76|AN12|AN26|AN70|C141|C160|C212|DHC6|SC7)/.test(t)) return 'cargo';
-  if (/^(GLOBE|ATLAS|ASCOT|JAKE|ROCKY|HEAVY)/.test(cs) && (gs||0) < 420) return 'cargo';
+    onAdd(map, gl) {
+      cam = new THREE.Camera();
 
-  // Attack helicopter
-  if (/^(AH64|AH1|EC665|TIGR|A129|LYNX|WA14|SA342)/.test(t)) return 'attack_heli';
+      threeRenderer = new THREE.WebGLRenderer({
+        canvas: map.getCanvas(), context: gl, antialias: true,
+      });
+      threeRenderer.autoClear = false; // ← critical: don't clear between aircraft draws
 
-  // Transport / utility helicopter
-  if (/^(CH47|CH53|S61|S70|S92|UH60|UH1|HH60|NH90|EC725|AS33|AS32|MI8|MI17|MI26|V22|EH10)/.test(t)) return 'transport_heli';
-  if ((gs||0) < 80) return 'transport_heli';
+      tpl = {
+        fighter:        mkScene(buildFighter()),
+        tanker:         mkScene(buildTanker()),
+        awacs:          mkScene(buildAWACS()),
+        cargo:          mkScene(buildCargo()),
+        attack_heli:    mkScene(buildAttackHeli()),
+        transport_heli: mkScene(buildChinook()),
+        civil_jet:      mkScene(buildCivJet()),
+        civil_prop:     mkScene(buildCivProp()),
+        civil_heli:     mkScene(buildCivHeli()),
+      };
+    },
 
-  // Fighter / fast jet (default for unknown mil)
-  return 'fighter';
-}
+    render(gl, mercatorMatrix) {
+      // mercatorMatrix = projection × view in mercator space.
+      // For each aircraft: camera = mercatorMatrix × T × Rz × S
+      // Model sits at origin; camera encodes its position + heading.
+      M4.fromArray(mercatorMatrix);
+      threeRenderer.resetState(); // sync Three.js state with GL after MapLibre draw
 
-function classifyCivil(typeCode, gs, altFt) {
-  const t = (typeCode || '').toUpperCase();
-  if (/^(R[0-9]|EC[0-9]|AW[0-9]|AS[34]\d|H[0-6]|S76|B06|BK1|MD9)/.test(t)) return 'civil_heli';
-  if ((gs||0) < 80) return 'civil_heli';
-  if ((gs||0) < 300 && (altFt||0) < 20000) return 'civil_prop';
+      for (const [, d] of flightMap) {
+        if (d.onGround) continue;
+        const sc = tpl[d.kind];
+        if (!sc) continue;
+
+        const mc = maplibregl.MercatorCoordinate.fromLngLat([d.lon, d.lat], d.displayAltM);
+        const s  = mc.meterInMercatorCoordinateUnits() * MODEL_M;
+        const θ  = THREE.MathUtils.degToRad(d.track || 0) - Math.PI / 2;
+
+        Lt.makeTranslation(mc.x, mc.y, mc.z);
+        Rz.makeRotationZ(θ);
+        Sc.makeScale(s, -s, s); // −s on Y: mercator Y is south-positive (inverted)
+
+        // camera = mercatorMatrix × (T × Rz × S)
+        cam.projectionMatrix.copy(M4).multiply(Lt).multiply(Rz).multiply(Sc);
+        threeRenderer.render(sc, cam);
+      }
+
+      refreshLabels();
+      map.triggerRepaint();
+    },
+  };
+})();
+
+// ── classify ─────────────────────────────────────────────────
+function classify(d) {
+  const t  = (d.typeCode || '').toUpperCase();
+  const cs = (d.callsign || '').toUpperCase();
+  const gs = d.gs || 0, alt = d.altFt || 0;
+
+  if (d.mil) {
+    if (/^(E3T|E3CF|E3D|E7W|B707|B70|E2C|E2D|P3C|P8|RC135|WJET)/.test(t)) return 'awacs';
+    if (/SNTRY|DISCO|ROOK|MAGIC|COBRA\d|SWORD/.test(cs))                    return 'awacs';
+    if (/^(KC13|KC10|KC46|K35R|A332|A342|B762|B764|IL78|VC10|DC10)/.test(t)) return 'tanker';
+    if (/^(RCH|REACH|MAKO|IRON|SHELL|OILER)/.test(cs))                       return 'tanker';
+    if (/^(C130|C17|C5|C27|C295|A400|IL76|AN12|AN26|AN70|C141|C160)/.test(t)) return 'cargo';
+    if (/^(GLOBE|ATLAS|ASCOT|JAKE|ROCKY)/.test(cs) && gs < 420)              return 'cargo';
+    if (/^(AH64|AH1|EC665|TIGR|A129|LYNX|SA342)/.test(t))                   return 'attack_heli';
+    if (/^(CH47|CH53|S61|S70|UH60|UH1|HH60|NH90|EC725|AS33|MI8|MI17|V22)/.test(t)) return 'transport_heli';
+    if (gs < 80) return 'transport_heli';
+    return 'fighter';
+  }
+  if (/^(R[0-9]|EC[0-9]|AW|H[0-6]|S76|B06|BK1|MD9)/.test(t)) return 'civil_heli';
+  if (gs < 80) return 'civil_heli';
+  if (gs < 300 && alt < 20000) return 'civil_prop';
   return 'civil_jet';
 }
 
-function makeGroup(d) {
-  if (d.mil) {
-    const kind = classifyMil(d.typeCode, d.callsign, d.gs);
-    if (kind === 'awacs')          return buildAWACS();
-    if (kind === 'tanker')         return buildTanker();
-    if (kind === 'cargo')          return buildCargo();
-    if (kind === 'attack_heli')    return buildAttackHeli();
-    if (kind === 'transport_heli') return buildChinook();
-    return buildFighter();
-  }
-  const kind = classifyCivil(d.typeCode, d.gs, d.altFt);
-  if (kind === 'civil_heli') return buildCivHeli();
-  if (kind === 'civil_prop') return buildCivProp();
-  return buildCivJet();
-}
-
-// ─────────────────────────────────────────────────────────────
-// Three.js custom MapLibre layer
-// ─────────────────────────────────────────────────────────────
-const threeLayer = {
-  id: '3d-aircraft', type: 'custom', renderingMode: '3d',
-
-  onAdd(map, gl) {
-    scene  = new THREE.Scene();
-    camera = new THREE.Camera();
-    camera.matrixAutoUpdate = false;
-
-    threeRenderer = new THREE.WebGLRenderer({
-      canvas: map.getCanvas(), context: gl, antialias: true,
-    });
-    threeRenderer.autoClear = false;
-
-    scene.add(new THREE.AmbientLight(0xffffff, 0.8));
-    const sun = new THREE.DirectionalLight(0xfff0cc, 1.0);
-    sun.position.set(1, 2, 0.8);
-    scene.add(sun);
-  },
-
-  render(gl, mercatorMatrix) {
-    // Set camera to the full mercator→clip matrix (view + projection combined).
-    // Our object matrices are in mercator coordinates, so this is correct.
-    camera.projectionMatrix.fromArray(mercatorMatrix);
-    camera.matrixWorld.identity();
-    camera.matrixWorldInverse.identity();
-
-    threeRenderer.resetState();
-    threeRenderer.render(scene, camera);
-    refreshLabels();
-    map.triggerRepaint();
-  },
-};
-
-// ─────────────────────────────────────────────────────────────
-// Mercator placement
-// M = T(mc.x, mc.y, mc.z) × Rz(heading − π/2) × S(s, −s, s)
-// The −s on Y corrects for mercator's south-positive Y axis.
-// ─────────────────────────────────────────────────────────────
-const _T  = new THREE.Matrix4();
-const _Rz = new THREE.Matrix4();
-const _S  = new THREE.Matrix4();
-
-function placeGroup(group, lon, lat, displayAltM, headingDeg) {
-  const mc = maplibregl.MercatorCoordinate.fromLngLat([lon, lat], displayAltM);
-  const s  = mc.meterInMercatorCoordinateUnits() * MODEL_M;
-  const θ  = THREE.MathUtils.degToRad(headingDeg || 0) - Math.PI / 2;
-
-  _T.makeTranslation(mc.x, mc.y, mc.z);
-  _Rz.makeRotationZ(θ);
-  _S.makeScale(s, -s, s);
-
-  group.matrixAutoUpdate = false;
-  group.matrix.copy(_T).multiply(_Rz).multiply(_S);
-  group.matrixWorldNeedsUpdate = true;
-}
-
-// ─────────────────────────────────────────────────────────────
-// Labels
-// ─────────────────────────────────────────────────────────────
+// ── labels ────────────────────────────────────────────────────
 const labelsEl = document.getElementById('labels');
 const labelEls = new Map();
 
 function refreshLabels() {
-  const zoom = map.getZoom();
-  if (zoom < 5) { labelsEl.style.display = 'none'; return; }
+  if (map.getZoom() < 5) { labelsEl.style.display = 'none'; return; }
   labelsEl.style.display = '';
   const W = window.innerWidth, H = window.innerHeight;
-  const shown = new Set();
+  const vis = new Set();
 
   for (const [hex, d] of flightMap) {
     if (d.onGround) continue;
     const px = map.project([d.lon, d.lat]);
     if (px.x < -30 || px.y < -30 || px.x > W+30 || px.y > H+30) continue;
-    shown.add(hex);
+    vis.add(hex);
     let el = labelEls.get(hex);
     if (!el) {
       el = document.createElement('div');
@@ -722,57 +564,49 @@ function refreshLabels() {
       labelsEl.appendChild(el);
       labelEls.set(hex, el);
     }
-    el.textContent  = d.callsign || hex.toUpperCase();
-    el.style.left   = px.x + 'px';
-    el.style.top    = px.y + 'px';
+    el.textContent = d.callsign || hex.toUpperCase();
+    el.style.left  = px.x + 'px';
+    el.style.top   = px.y + 'px';
     el.style.display = '';
   }
-  for (const [hex, el] of labelEls) {
-    if (!shown.has(hex)) el.style.display = 'none';
-  }
+  for (const [hex, el] of labelEls)
+    if (!vis.has(hex)) el.style.display = 'none';
 }
 
-// ─────────────────────────────────────────────────────────────
-// Click to inspect
-// ─────────────────────────────────────────────────────────────
+// ── click to inspect ──────────────────────────────────────────
 map.getCanvas().addEventListener('click', e => {
   const rect = map.getCanvas().getBoundingClientRect();
   const cx = e.clientX - rect.left, cy = e.clientY - rect.top;
-  let best = null, bestD2 = 60 * 60;
+  let best = null, bestD = 60 * 60;
   for (const [, d] of flightMap) {
     if (d.onGround) continue;
     const px = map.project([d.lon, d.lat]);
     const d2 = (px.x - cx) ** 2 + (px.y - cy) ** 2;
-    if (d2 < bestD2) { bestD2 = d2; best = d; }
+    if (d2 < bestD) { bestD = d2; best = d; }
   }
   if (best) showPanel(best);
 });
 
 function showPanel(d) {
-  const isMil = !!d.mil;
   document.getElementById('i-cs').innerHTML =
     (d.callsign || d.hex?.toUpperCase() || '—') +
-    (isMil ? '<span class="i-badge">MILITARY</span>' : '');
+    (d.mil ? '<span class="i-badge">MILITARY</span>' : '');
   document.getElementById('i-sub').textContent = d.reg
     ? `Reg: ${d.reg}` : (d.hex?.toUpperCase() || '—');
   document.getElementById('i-alt').textContent =
     d.altFt != null ? `${Math.round(d.altFt).toLocaleString()} ft` : 'N/A';
   document.getElementById('i-spd').textContent =
-    d.gs    != null ? `${Math.round(d.gs)} kts` : 'N/A';
+    d.gs != null ? `${Math.round(d.gs)} kts` : 'N/A';
   document.getElementById('i-hdg').textContent =
     d.track != null ? `${Math.round(d.track)}°` : 'N/A';
   document.getElementById('i-typ').textContent = d.typeCode || '—';
-
-  const panel = document.getElementById('info-panel');
-  panel.classList.toggle('mil-panel', isMil);
-  document.querySelectorAll('.i-cell span').forEach(s =>
-    s.classList.toggle('mc', isMil));
-  panel.classList.add('open');
+  const p = document.getElementById('info-panel');
+  p.classList.toggle('mp', !!d.mil);
+  document.querySelectorAll('.i-cell span').forEach(s => s.classList.toggle('mv', !!d.mil));
+  p.classList.add('open');
 }
 
-// ─────────────────────────────────────────────────────────────
-// Fetch + update
-// ─────────────────────────────────────────────────────────────
+// ── fetch + update ────────────────────────────────────────────
 function setStatus(cls, msg) {
   document.getElementById('s-dot').className = 's-dot' + (cls ? ' '+cls : '');
   document.getElementById('status-msg').textContent = msg;
@@ -797,45 +631,24 @@ async function fetchAndUpdate() {
       const altFt    = typeof s.alt_baro === 'number' ? s.alt_baro
                      : typeof s.altitude  === 'number' ? s.altitude : null;
       const onGround = s.alt_baro === 'ground' || s.on_ground === true || s.on_ground === 1;
-      const rawAltM  = (altFt ?? 15000) * 0.3048;
-      const displayAltM = onGround ? 0 : Math.max(rawAltM * ALT_EXAG, 4000);
+      const displayAltM = onGround ? 0 : Math.max((altFt ?? 15000) * 0.3048 * ALT_EXAG, 4000);
 
-      newMap.set(hex, {
-        hex, lat, lon, altFt, displayAltM,
-        gs:       s.gs      ?? s.velocity   ?? null,
-        track:    s.track   ?? s.true_track ?? null,
-        callsign: (s.flight ?? s.callsign   ?? '').trim(),
-        typeCode: s.t       ?? s.type       ?? '',
+      const d = {
+        hex, lat, lon, altFt, displayAltM, onGround,
+        gs:       s.gs      ?? s.velocity    ?? null,
+        track:    s.track   ?? s.true_track  ?? null,
+        callsign: (s.flight ?? s.callsign    ?? '').trim(),
+        typeCode: s.t       ?? s.type        ?? '',
         reg:      s.r       ?? s.registration ?? '',
         mil:      !!s.mil,
-        onGround,
-      });
+      };
+      d.kind = classify(d);
+      newMap.set(hex, d);
     }
 
-    // Remove gone aircraft
-    for (const [hex, grp] of meshMap) {
-      if (!newMap.has(hex)) {
-        scene.remove(grp);
-        meshMap.delete(hex);
-        const el = labelEls.get(hex);
-        if (el) { el.remove(); labelEls.delete(hex); }
-      }
-    }
-
-    // Add / move aircraft
-    for (const [hex, d] of newMap) {
-      if (d.onGround) {
-        if (meshMap.has(hex)) { scene.remove(meshMap.get(hex)); meshMap.delete(hex); }
-        continue;
-      }
-      let grp = meshMap.get(hex);
-      if (!grp) {
-        grp = makeGroup(d);
-        grp.traverse(o => { o.frustumCulled = false; });
-        scene.add(grp);
-        meshMap.set(hex, grp);
-      }
-      placeGroup(grp, d.lon, d.lat, d.displayAltM, d.track ?? 0);
+    // Remove stale labels
+    for (const [hex, el] of labelEls) {
+      if (!newMap.has(hex)) { el.remove(); labelEls.delete(hex); }
     }
 
     flightMap = newMap;
@@ -858,10 +671,8 @@ function startFetching() {
   setInterval(fetchAndUpdate, REFRESH_MS);
 }
 
-// ─────────────────────────────────────────────────────────────
-// UI controls
-// ─────────────────────────────────────────────────────────────
-document.querySelectorAll('.reg-btn').forEach(btn => {
+// ── UI controls ────────────────────────────────────────────────
+document.querySelectorAll('.reg-btn').forEach(btn =>
   btn.addEventListener('click', () => {
     document.querySelectorAll('.reg-btn').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
@@ -869,17 +680,12 @@ document.querySelectorAll('.reg-btn').forEach(btn => {
     const v = REGION_VIEWS[currentRegion];
     map.easeTo({ center: v.center, zoom: v.zoom, pitch: v.pitch, duration: 1200 });
     fetchAndUpdate();
-  });
-});
-
-document.getElementById('btn-tilt-up').addEventListener('click', () =>
-  map.easeTo({ pitch: Math.min(map.getPitch()+10, 85), duration: 300 }));
-document.getElementById('btn-tilt-down').addEventListener('click', () =>
-  map.easeTo({ pitch: Math.max(map.getPitch()-10, 0), duration: 300 }));
-document.getElementById('btn-zoom-in').addEventListener('click', () =>
-  map.easeTo({ zoom: map.getZoom()+0.8, duration: 300 }));
-document.getElementById('btn-zoom-out').addEventListener('click', () =>
-  map.easeTo({ zoom: map.getZoom()-0.8, duration: 300 }));
+  })
+);
+document.getElementById('btn-tup').addEventListener('click',  () => map.easeTo({ pitch: Math.min(map.getPitch()+10, 85), duration: 300 }));
+document.getElementById('btn-tdn').addEventListener('click',  () => map.easeTo({ pitch: Math.max(map.getPitch()-10, 0),  duration: 300 }));
+document.getElementById('btn-zin').addEventListener('click',  () => map.easeTo({ zoom: map.getZoom()+0.8, duration: 300 }));
+document.getElementById('btn-zout').addEventListener('click', () => map.easeTo({ zoom: map.getZoom()-0.8, duration: 300 }));
 document.getElementById('info-close').addEventListener('click', () =>
   document.getElementById('info-panel').classList.remove('open'));
 </script>
