@@ -4,8 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Military 3D Flight Tracker</title>
-  <link href="https://unpkg.com/maplibre-gl/dist/maplibre-gl.css" rel="stylesheet">
-  <script src="https://unpkg.com/maplibre-gl/dist/maplibre-gl.js"></script>
+  <link href="https://unpkg.com/maplibre-gl@5/dist/maplibre-gl.css" rel="stylesheet">
+  <script src="https://unpkg.com/maplibre-gl@5/dist/maplibre-gl.js"></script>
   <script src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>
   <style>
     *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
@@ -488,11 +488,11 @@ const threeLayer = (() => {
       };
     },
 
-    render(gl, mercatorMatrix) {
-      // mercatorMatrix = projection × view in mercator space.
-      // For each aircraft: camera = mercatorMatrix × T × Rz × S
-      // Model sits at origin; camera encodes its position + heading.
-      M4.fromArray(mercatorMatrix);
+    render(gl, options) {
+      // MapLibre v3+ passes a CustomRenderMethodInput options object.
+      // modelViewProjectionMatrix is the world→clip matrix (replaces the
+      // raw Float32Array that older MapLibre versions passed directly).
+      M4.fromArray(options.modelViewProjectionMatrix);
 
       // Screen-space scale: MODEL_PX pixels per geometry unit at every zoom.
       // 512 * 2^zoom = mercator pixels per world unit (standard MapLibre tile math).
