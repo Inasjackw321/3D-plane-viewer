@@ -4,31 +4,47 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Live 3D Flight Tracker</title>
-  <script src="//unpkg.com/globe.gl"></script>
+  <link href="//unpkg.com/maplibre-gl/dist/maplibre-gl.css" rel="stylesheet">
+  <script src="//unpkg.com/maplibre-gl/dist/maplibre-gl.js"></script>
+  <script src="//unpkg.com/three@0.160.0/build/three.min.js"></script>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: #000;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
 
-    html, body {
-      width: 100%; height: 100%; overflow: hidden;
-      background: #000;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    #map { width: 100%; height: 100%; }
+
+    /* ── label container ─────────────────────────────────────── */
+    #labels { position: fixed; inset: 0; pointer-events: none; z-index: 5; overflow: hidden; }
+
+    .ac-label {
+      position: absolute; top: 0; left: 0;
+      pointer-events: none;
+      transform-origin: left bottom;
+      padding: 2px 7px;
+      background: rgba(0,15,0,0.82);
+      border: 1px solid #00cc44;
+      border-radius: 4px;
+      font-size: 10px; font-family: monospace; font-weight: 700;
+      color: #00ff55;
+      white-space: nowrap;
+      translate: -50% -170%;
+      display: none;
     }
+    .ac-label[data-type="turboprop"] { border-color: #ffaa00; color: #ffcc44; }
+    .ac-label[data-type="helicopter"] { border-color: #ff6600; color: #ff9944; }
 
-    #globe { width: 100%; height: 100%; }
-
-    /* ── overlay ─────────────────────────────────────────────── */
+    /* ── overlay shell ───────────────────────────────────────── */
     #overlay { position: fixed; inset: 0; pointer-events: none; z-index: 10; }
 
     /* ── header ──────────────────────────────────────────────── */
     #header {
-      position: absolute; top: 16px; left: 50%;
-      transform: translateX(-50%);
+      position: absolute; top: 14px; left: 50%; transform: translateX(-50%);
       display: flex; align-items: center; gap: 16px;
-      background: rgba(4,8,20,.84);
-      border: 1px solid rgba(80,160,255,.22);
-      border-radius: 14px; padding: 10px 20px;
-      backdrop-filter: blur(14px);
-      pointer-events: all; white-space: nowrap; user-select: none;
+      background: rgba(4,8,20,.86); border: 1px solid rgba(80,160,255,.22);
+      border-radius: 14px; padding: 9px 20px;
+      backdrop-filter: blur(14px); pointer-events: all;
+      white-space: nowrap; user-select: none;
     }
     #header h1 { font-size: 14px; font-weight: 700; color: #fff; letter-spacing: 1px; text-transform: uppercase; }
     #header h1 .live { color: #ff5500; }
@@ -37,173 +53,167 @@
     .stat-v { font-size: 17px; font-weight: 800; color: #ff6620; line-height: 1; }
     .stat-l { font-size: 9px; color: rgba(255,255,255,.38); text-transform: uppercase; letter-spacing: 1px; }
 
-    /* ── region pill strip ───────────────────────────────────── */
+    /* ── legend ──────────────────────────────────────────────── */
+    #legend {
+      position: absolute; top: 14px; left: 16px;
+      background: rgba(4,8,20,.84); border: 1px solid rgba(80,160,255,.2);
+      border-radius: 10px; padding: 8px 12px;
+      pointer-events: none; backdrop-filter: blur(10px);
+    }
+    .leg-row { display: flex; align-items: center; gap: 6px; font-size: 10px;
+      color: rgba(255,255,255,.6); margin: 2px 0; }
+    .leg-dot { width: 8px; height: 8px; border-radius: 50%; }
+
+    /* ── region pills ────────────────────────────────────────── */
     #regions {
-      position: absolute; top: 72px; left: 50%;
-      transform: translateX(-50%);
-      display: flex; gap: 6px;
-      pointer-events: all;
+      position: absolute; top: 68px; left: 50%; transform: translateX(-50%);
+      display: flex; gap: 5px; pointer-events: all;
     }
     .rbtn {
-      padding: 5px 13px;
-      background: rgba(4,8,20,.78);
-      border: 1px solid rgba(80,160,255,.22);
-      border-radius: 20px;
-      color: rgba(255,255,255,.55);
-      font-size: 11px; font-weight: 600;
-      cursor: pointer; white-space: nowrap;
+      padding: 5px 12px;
+      background: rgba(4,8,20,.80); border: 1px solid rgba(80,160,255,.22);
+      border-radius: 20px; color: rgba(255,255,255,.55);
+      font-size: 11px; font-weight: 600; cursor: pointer; white-space: nowrap;
       backdrop-filter: blur(10px);
       transition: background .15s, border-color .15s, color .15s;
     }
-    .rbtn:hover  { background: rgba(255,85,0,.2);  border-color: rgba(255,85,0,.5); color: #fff; }
-    .rbtn.active { background: rgba(255,85,0,.32); border-color: #ff5500;           color: #fff; }
+    .rbtn:hover  { background: rgba(255,85,0,.2); border-color: rgba(255,85,0,.5); color: #fff; }
+    .rbtn.active { background: rgba(255,85,0,.32); border-color: #ff5500; color: #fff; }
 
     /* ── info panel ──────────────────────────────────────────── */
     #info-panel {
-      position: absolute; top: 112px; right: 16px;
-      width: 248px;
-      background: rgba(4,8,20,.9);
-      border: 1px solid rgba(80,160,255,.25);
+      position: absolute; top: 108px; right: 14px; width: 250px;
+      background: rgba(4,8,20,.9); border: 1px solid rgba(80,160,255,.25);
       border-radius: 14px; padding: 16px;
-      pointer-events: all; backdrop-filter: blur(14px);
-      display: none;
+      pointer-events: all; backdrop-filter: blur(14px); display: none;
     }
     #info-panel.open { display: block; }
     #info-close {
-      position: absolute; top: 9px; right: 12px;
-      background: none; border: none;
-      color: rgba(255,255,255,.3); cursor: pointer;
-      font-size: 20px; line-height: 1; padding: 2px 5px;
+      position: absolute; top: 9px; right: 11px;
+      background: none; border: none; color: rgba(255,255,255,.3);
+      cursor: pointer; font-size: 20px; line-height: 1; padding: 2px 5px;
       transition: color .15s;
     }
     #info-close:hover { color: #fff; }
-    .i-cs   { font-size: 23px; font-weight: 800; color: #fff; margin-bottom: 2px; }
+    .i-cs   { font-size: 22px; font-weight: 800; color: #fff; margin-bottom: 2px; }
     .i-ctry { font-size: 11px; color: rgba(255,255,255,.36); margin-bottom: 12px; }
     .i-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-    .i-cell label {
-      display: block; font-size: 9px; color: rgba(255,255,255,.36);
-      text-transform: uppercase; letter-spacing: .9px; margin-bottom: 2px;
-    }
+    .i-cell label { display: block; font-size: 9px; color: rgba(255,255,255,.36);
+      text-transform: uppercase; letter-spacing: .9px; margin-bottom: 2px; }
     .i-cell span { font-size: 14px; font-weight: 700; color: #ff8844; }
 
     /* ── controls ────────────────────────────────────────────── */
     #controls {
-      position: absolute; bottom: 54px; right: 16px;
-      display: flex; flex-direction: column; gap: 6px;
-      pointer-events: all;
+      position: absolute; bottom: 50px; right: 14px;
+      display: flex; flex-direction: column; gap: 5px; pointer-events: all;
     }
     .ctl {
-      width: 38px; height: 38px;
-      background: rgba(4,8,20,.82);
-      border: 1px solid rgba(80,160,255,.22);
-      border-radius: 9px; color: rgba(255,255,255,.6);
-      cursor: pointer; font-size: 17px;
+      width: 36px; height: 36px;
+      background: rgba(4,8,20,.84); border: 1px solid rgba(80,160,255,.22);
+      border-radius: 8px; color: rgba(255,255,255,.6);
+      cursor: pointer; font-size: 16px;
       display: flex; align-items: center; justify-content: center;
       backdrop-filter: blur(10px);
       transition: background .15s, border-color .15s, color .15s;
     }
     .ctl:hover  { background: rgba(255,85,0,.22); border-color: #ff5500; color: #fff; }
     .ctl.active { background: rgba(255,85,0,.35); border-color: #ff5500; color: #fff; }
+    .ctl-sep { height: 6px; }
 
     /* ── status bar ──────────────────────────────────────────── */
     #status-bar {
-      position: absolute; bottom: 14px; left: 50%;
-      transform: translateX(-50%);
+      position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%);
       display: flex; align-items: center; gap: 7px;
-      background: rgba(4,8,20,.72);
-      border: 1px solid rgba(80,160,255,.15);
+      background: rgba(4,8,20,.74); border: 1px solid rgba(80,160,255,.15);
       border-radius: 20px; padding: 5px 14px;
       pointer-events: none; backdrop-filter: blur(8px);
     }
-    .s-dot {
-      width: 7px; height: 7px; border-radius: 50%; background: #00e87a;
-      animation: blink 2s ease-in-out infinite;
-    }
+    .s-dot { width: 7px; height: 7px; border-radius: 50%; background: #00e87a;
+      animation: blink 2s ease-in-out infinite; }
     .s-dot.warn { background: #ffaa00; animation: none; }
     .s-dot.err  { background: #ff4040; animation: none; }
     .s-dot.load { background: #4499ff; animation: none; }
     @keyframes blink { 0%,100%{opacity:1}50%{opacity:.2} }
     #status-msg { font-size: 11px; color: rgba(255,255,255,.48); }
 
+    /* ── tilt hint ───────────────────────────────────────────── */
+    #tilt-hint {
+      position: absolute; bottom: 12px; right: 60px;
+      font-size: 10px; color: rgba(255,255,255,.3);
+      pointer-events: none;
+    }
+
     /* ── splash ──────────────────────────────────────────────── */
     #splash {
       position: fixed; inset: 0; background: #010409;
       display: flex; flex-direction: column;
       align-items: center; justify-content: center; gap: 14px;
-      z-index: 999; transition: opacity .5s;
+      z-index: 999; transition: opacity .6s;
     }
     #splash.gone { opacity: 0; pointer-events: none; }
-    .spin {
-      width: 42px; height: 42px;
-      border: 3px solid rgba(255,85,0,.18);
+    .spin { width: 42px; height: 42px; border: 3px solid rgba(255,85,0,.18);
       border-top-color: #ff5500; border-radius: 50%;
-      animation: rot .8s linear infinite;
-    }
+      animation: rot .8s linear infinite; }
     @keyframes rot { to { transform: rotate(360deg); } }
     #splash p { font-size: 13px; color: rgba(255,255,255,.42); }
 
-    /* ── globe.gl tooltip ────────────────────────────────────── */
-    .globe-tip {
-      background: rgba(4,8,20,.9) !important;
-      border: 1px solid rgba(80,160,255,.28) !important;
-      border-radius: 10px !important;
-      padding: 8px 12px !important;
-      font-size: 12px !important; color: #fff !important;
-      pointer-events: none; line-height: 1.6;
-    }
+    /* hide maplibre default controls (we have our own) */
+    .maplibregl-ctrl-bottom-right { display: none !important; }
+    .maplibregl-ctrl-attrib { display: none !important; }
   </style>
 </head>
 <body>
 
-<div id="globe"></div>
+<div id="map"></div>
+<div id="labels"></div>
 
-<div id="splash">
-  <div class="spin"></div>
-  <p>Loading globe…</p>
-</div>
+<div id="splash"><div class="spin"></div><p>Loading map…</p></div>
 
 <div id="overlay">
 
   <div id="header">
     <h1>✈ <span class="live">LIVE</span> FLIGHTS</h1>
     <div class="hdiv"></div>
-    <div class="stat">
-      <div class="stat-v" id="hdr-count">—</div>
-      <div class="stat-l">Aircraft</div>
-    </div>
+    <div class="stat"><div class="stat-v" id="hdr-count">—</div><div class="stat-l">Aircraft</div></div>
     <div class="hdiv"></div>
-    <div class="stat">
-      <div class="stat-v" id="hdr-time">—</div>
-      <div class="stat-l">Updated</div>
-    </div>
+    <div class="stat"><div class="stat-v" id="hdr-time">—</div><div class="stat-l">Updated</div></div>
   </div>
 
-  <!-- Region selector -->
+  <div id="legend">
+    <div class="leg-row"><div class="leg-dot" style="background:#ff8800"></div>Jet airliner</div>
+    <div class="leg-row"><div class="leg-dot" style="background:#ffcc00"></div>Turboprop / GA</div>
+    <div class="leg-row"><div class="leg-dot" style="background:#ff5500"></div>Helicopter</div>
+  </div>
+
   <div id="regions">
     <button class="rbtn active" data-region="middle_east">Middle East</button>
-    <button class="rbtn"        data-region="europe">Europe</button>
-    <button class="rbtn"        data-region="north_america">N. America</button>
-    <button class="rbtn"        data-region="asia">Asia Pacific</button>
-    <button class="rbtn"        data-region="global">Global</button>
+    <button class="rbtn" data-region="europe">Europe</button>
+    <button class="rbtn" data-region="north_america">N. America</button>
+    <button class="rbtn" data-region="asia">Asia Pacific</button>
+    <button class="rbtn" data-region="global">Global</button>
   </div>
 
-  <!-- Flight info -->
   <div id="info-panel">
     <button id="info-close">×</button>
     <div class="i-cs"   id="i-cs">—</div>
     <div class="i-ctry" id="i-ctry">—</div>
     <div class="i-grid">
+      <div class="i-cell"><label>Type</label>    <span id="i-type">—</span></div>
+      <div class="i-cell"><label>ICAO24</label>  <span id="i-icao">—</span></div>
       <div class="i-cell"><label>Altitude</label><span id="i-alt">—</span></div>
       <div class="i-cell"><label>Speed</label>   <span id="i-spd">—</span></div>
       <div class="i-cell"><label>Heading</label> <span id="i-hdg">—</span></div>
-      <div class="i-cell"><label>ICAO24</label>  <span id="i-icao">—</span></div>
+      <div class="i-cell"><label>Country</label> <span id="i-ctry2">—</span></div>
     </div>
   </div>
 
   <div id="controls">
-    <button class="ctl" id="btn-home" title="Reset view">🌍</button>
-    <button class="ctl" id="btn-spin" title="Auto-rotate">🔄</button>
-    <button class="ctl" id="btn-day"  title="Toggle day/night">🌓</button>
+    <button class="ctl" id="btn-home"     title="Reset view">🌍</button>
+    <div class="ctl-sep"></div>
+    <button class="ctl" id="btn-tilt-up"  title="Tilt up">▲</button>
+    <button class="ctl" id="btn-tilt-dn"  title="Tilt down">▼</button>
+    <div class="ctl-sep"></div>
+    <button class="ctl" id="btn-spin"     title="Auto-rotate">🔄</button>
   </div>
 
   <div id="status-bar">
@@ -211,225 +221,475 @@
     <span id="status-msg">Initializing…</span>
   </div>
 
+  <div id="tilt-hint">Right-drag to tilt · Scroll to zoom</div>
+
 </div>
 
 <script>
-// ──────────────────────────────────────────────────────────────
-// Region config  (camera views + api key)
-// ──────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────
+// Config
+// ─────────────────────────────────────────────────────────────
 const REGIONS = {
-  middle_east:   { lat: 27,  lng: 45,   alt: 1.5 },
-  europe:        { lat: 52,  lng: 15,   alt: 1.8 },
-  north_america: { lat: 38,  lng: -95,  alt: 1.8 },
-  asia:          { lat: 25,  lng: 105,  alt: 1.8 },
-  global:        { lat: 20,  lng: 0,    alt: 2.5 },
+  middle_east:   { lat: 27,  lng: 45,  zoom: 5.5 },
+  europe:        { lat: 51,  lng: 13,  zoom: 4.5 },
+  north_america: { lat: 38,  lng: -95, zoom: 4.0 },
+  asia:          { lat: 30,  lng: 110, zoom: 4.0 },
+  global:        { lat: 20,  lng: 0,   zoom: 2.5 },
 };
 
-const CFG = {
-  refreshMs:  15_000,
-  maxTrail:   8,
-  maxFlights: 6_000,
-};
+// Exaggerated display size in metres so aircraft are visible at regional zoom
+const MODEL_M = 55_000;
 
 let currentRegion = 'middle_east';
+let map, scene, camera, threeRenderer;
 
-// ──────────────────────────────────────────────────────────────
-// Globe
-// ──────────────────────────────────────────────────────────────
-const EARTH_NIGHT = '//unpkg.com/three-globe/example/img/earth-night.jpg';
-const EARTH_DAY   = '//unpkg.com/three-globe/example/img/earth-blue-marble.jpg';
-const EARTH_BUMP  = '//unpkg.com/three-globe/example/img/earth-topology.png';
-const SKY         = '//unpkg.com/three-globe/example/img/night-sky.png';
+// icao → {lon,lat,alt,heading,callsign,country,speedMs,type}
+const flightData    = new Map();
+// icao → THREE.Group
+const aircraftMeshes = new Map();
+// icao → HTMLElement
+const labelEls       = new Map();
 
-const world = Globe()(document.getElementById('globe'))
-  .globeImageUrl(EARTH_NIGHT)
-  .bumpImageUrl(EARTH_BUMP)
-  .backgroundImageUrl(SKY)
-  .showAtmosphere(true)
-  .atmosphereColor('#1a66ff')
-  .atmosphereAltitude(0.18)
-  .pointsData([])
-  .pointLat('lat')
-  .pointLng('lon')
-  .pointAltitude(d => Math.max(d.alt / 800_000, 0.005))
-  .pointColor('color')
-  .pointRadius(0.28)
-  .pointLabel(d =>
-    `<div class="globe-tip">
-       <b style="color:#ff8844">${d.callsign}</b><br>
-       ${d.country}<br>
-       ${fmtFt(d.alt)} · ${fmtKts(d.speedMs)}
-     </div>`)
-  .onPointClick(showInfo)
-  .pathsData([])
-  .pathPoints('points')
-  .pathPointLat(p => p.lat)
-  .pathPointLng(p => p.lon)
-  .pathPointAlt(p => Math.max(p.alt / 800_000, 0.005))
-  .pathColor(() => ['rgba(255,255,255,0.7)', 'rgba(255,255,255,0.02)'])
-  .pathStroke(0.4)
-  .pathDashLength(0.02)
-  .pathDashGap(0.006)
-  .pathDashAnimateTime(8_000);
+// ─────────────────────────────────────────────────────────────
+// Three.js materials
+// ─────────────────────────────────────────────────────────────
+const M_JET  = new THREE.MeshLambertMaterial({ color: 0xff8800, emissive: 0xff5500, emissiveIntensity: 0.55 });
+const M_PROP = new THREE.MeshLambertMaterial({ color: 0xffcc00, emissive: 0xffaa00, emissiveIntensity: 0.55 });
+const M_HELI = new THREE.MeshLambertMaterial({ color: 0xff5500, emissive: 0xff3300, emissiveIntensity: 0.55 });
+const M_SEMI = (mat) => mat.clone();
 
-// Start looking at Middle East
-const r0 = REGIONS.middle_east;
-world.pointOfView({ lat: r0.lat, lng: r0.lng, altitude: r0.alt }, 0);
+// ─────────────────────────────────────────────────────────────
+// Aircraft model builders  (nose → +X, right-wing → +Y, up → +Z)
+// ─────────────────────────────────────────────────────────────
+function buildJet() {
+  const g = new THREE.Group();
+  const m = M_JET;
 
-world.onGlobeReady(() => document.getElementById('splash').classList.add('gone'));
+  // Fuselage — cylinder along X
+  const fus = new THREE.Mesh(new THREE.CylinderGeometry(0.85, 0.55, 13, 8), m);
+  fus.rotation.z = Math.PI / 2;
+  g.add(fus);
 
-// ──────────────────────────────────────────────────────────────
-// State
-// ──────────────────────────────────────────────────────────────
-const trailHistory = new Map();
-let nightMode = true;
+  // Main wings — box along Y, slightly aft
+  const wing = new THREE.Mesh(new THREE.BoxGeometry(4.5, 17, 0.22), m);
+  wing.position.x = -0.5;
+  g.add(wing);
 
-// ──────────────────────────────────────────────────────────────
-// Helpers
-// ──────────────────────────────────────────────────────────────
-function fmtFt(m)  { return m != null ? `${Math.round(m * 3.28084).toLocaleString()} ft` : 'N/A'; }
-function fmtKts(s) { return s != null ? `${Math.round(s * 1.94384)} kts` : 'N/A'; }
-function fmtHdg(d) {
-  if (d == null) return 'N/A';
-  const dirs = ['N','NE','E','SE','S','SW','W','NW'];
-  return `${Math.round(d)}° ${dirs[Math.round(d / 45) % 8]}`;
-}
-function setStatus(type, msg) {
-  document.getElementById('s-dot').className = 's-dot' + (type !== 'ok' ? ` ${type}` : '');
-  document.getElementById('status-msg').textContent = msg;
-}
-function showInfo(d) {
-  if (!d) return;
-  document.getElementById('i-cs').textContent   = d.callsign || d.icao || '—';
-  document.getElementById('i-ctry').textContent = d.country  || 'Unknown';
-  document.getElementById('i-alt').textContent  = fmtFt(d.alt);
-  document.getElementById('i-spd').textContent  = fmtKts(d.speedMs);
-  document.getElementById('i-hdg').textContent  = fmtHdg(d.heading);
-  document.getElementById('i-icao').textContent = (d.icao || '').toUpperCase();
-  document.getElementById('info-panel').classList.add('open');
+  // H-stabiliser
+  const hs = new THREE.Mesh(new THREE.BoxGeometry(2, 6.5, 0.18), m);
+  hs.position.set(-6, 0, 0.2);
+  g.add(hs);
+
+  // V-stabiliser
+  const vs = new THREE.Mesh(new THREE.BoxGeometry(2, 0.18, 2.8), m);
+  vs.position.set(-6, 0, 1.3);
+  g.add(vs);
+
+  // Two engines under wings
+  for (const side of [-1, 1]) {
+    const eng = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.48, 2.8, 8), m);
+    eng.rotation.z = Math.PI / 2;
+    eng.position.set(0, side * 4.8, -0.75);
+    g.add(eng);
+  }
+  return g;
 }
 
-// ──────────────────────────────────────────────────────────────
-// Fetch via local Python proxy (bypasses CORS)
-// ──────────────────────────────────────────────────────────────
-async function fetchStates(region) {
-  try {
-    const r = await fetch(`/api/flights?region=${region}`, {
-      signal: AbortSignal.timeout(18_000),
-    });
-    if (!r.ok) throw new Error(`HTTP ${r.status}`);
-    const j = await r.json();
-    if (j.error) throw new Error(j.error);
-    return j.states ?? [];
-  } catch (e) {
-    console.warn('[flights]', e.message);
-    return null;
+function buildTurboprop() {
+  const g = new THREE.Group();
+  const m = M_PROP;
+
+  // Fuselage
+  const fus = new THREE.Mesh(new THREE.CylinderGeometry(0.78, 0.5, 8.5, 8), m);
+  fus.rotation.z = Math.PI / 2;
+  g.add(fus);
+
+  // High straight wings
+  const wing = new THREE.Mesh(new THREE.BoxGeometry(2.8, 13, 0.2), m);
+  wing.position.set(0, 0, 0.55);
+  g.add(wing);
+
+  // H-stab
+  const hs = new THREE.Mesh(new THREE.BoxGeometry(1.4, 5, 0.16), m);
+  hs.position.set(-4.2, 0, 0.2);
+  g.add(hs);
+
+  // V-stab
+  const vs = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.16, 2.2), m);
+  vs.position.set(-4.2, 0, 1.0);
+  g.add(vs);
+
+  // Propeller disk (semi-transparent)
+  const propMat = new THREE.MeshLambertMaterial({
+    color: 0xffcc00, emissive: 0xffaa00, transparent: true, opacity: 0.65,
+  });
+  const prop = new THREE.Mesh(new THREE.CylinderGeometry(2.0, 2.0, 0.1, 16), propMat);
+  prop.rotation.z = Math.PI / 2;
+  prop.position.x = 4.8;
+  g.add(prop);
+
+  return g;
+}
+
+function buildHelicopter() {
+  const g = new THREE.Group();
+  const m = M_HELI;
+
+  // Main body
+  const body = new THREE.Mesh(new THREE.SphereGeometry(1.8, 8, 6), m);
+  body.scale.set(1.6, 1.0, 0.9);
+  g.add(body);
+
+  // Tail boom
+  const boom = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.15, 7, 8), m);
+  boom.rotation.z = Math.PI / 2;
+  boom.position.set(-5.2, 0, 0.1);
+  g.add(boom);
+
+  // Main rotor (large semi-transparent disk)
+  const rotorMat = new THREE.MeshLambertMaterial({
+    color: 0xff7700, emissive: 0xff5500, transparent: true, opacity: 0.55,
+  });
+  const rotor = new THREE.Mesh(new THREE.CylinderGeometry(5.5, 5.5, 0.08, 16), rotorMat);
+  rotor.position.set(0, 0, 1.7);
+  g.add(rotor);
+
+  // Tail rotor (small, vertical)
+  const trotor = new THREE.Mesh(new THREE.CylinderGeometry(1.4, 1.4, 0.07, 12), m);
+  trotor.rotation.x = Math.PI / 2;
+  trotor.position.set(-8.7, 0, 0.6);
+  g.add(trotor);
+
+  return g;
+}
+
+function classify(speedMs, altM) {
+  const kts = (speedMs ?? 0) * 1.944;
+  if (kts < 80)                        return 'helicopter';
+  if (kts < 280 && (altM ?? 0) < 6000) return 'turboprop';
+  return 'jet';
+}
+
+function makeGroup(type) {
+  const g = new THREE.Group();
+  g.matrixAutoUpdate = false;
+  g.add(type === 'helicopter' ? buildHelicopter() :
+        type === 'turboprop'  ? buildTurboprop()  : buildJet());
+
+  // Point light for the glow
+  const col = type === 'helicopter' ? 0xff5500 : type === 'turboprop' ? 0xffcc00 : 0xff8800;
+  g.add(new THREE.PointLight(col, 1.2, 0));
+  return g;
+}
+
+// ─────────────────────────────────────────────────────────────
+// Mercator positioning
+// Math: M = T × Rz(heading_rad − π/2) × S(s,−s,s)
+// This places the nose (+X) in the heading direction after
+// accounting for mercator's inverted Y axis.
+// ─────────────────────────────────────────────────────────────
+function placeGroup(group, lon, lat, altM, headingDeg) {
+  const mc = maplibregl.MercatorCoordinate.fromLngLat([lon, lat], altM);
+  const s  = mc.meterInMercatorCoordinateUnits() * MODEL_M;
+  const θ  = THREE.MathUtils.degToRad(headingDeg ?? 0) - Math.PI / 2;
+
+  group.matrix
+    .makeTranslation(mc.x, mc.y, mc.z)
+    .multiply(new THREE.Matrix4().makeRotationZ(θ))
+    .multiply(new THREE.Matrix4().makeScale(s, -s, s));
+  group.matrixWorldNeedsUpdate = true;
+}
+
+// ─────────────────────────────────────────────────────────────
+// MapLibre initialisation
+// ─────────────────────────────────────────────────────────────
+function initMap() {
+  const r0 = REGIONS[currentRegion];
+
+  map = new maplibregl.Map({
+    container: 'map',
+    style: {
+      version: 8,
+      glyphs: 'https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf',
+      sources: {
+        satellite: {
+          type: 'raster',
+          tiles: ['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'],
+          tileSize: 256, maxzoom: 19,
+        },
+        terrain: {
+          type: 'raster-dem',
+          tiles: ['https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png'],
+          encoding: 'terrarium',
+          tileSize: 256, maxzoom: 15,
+        },
+      },
+      layers: [
+        { id: 'sat', type: 'raster', source: 'satellite' },
+        { id: 'sky', type: 'sky', paint: {
+            'sky-type': 'atmosphere',
+            'sky-atmosphere-sun': [0, 90],
+            'sky-atmosphere-sun-intensity': 12,
+        }},
+      ],
+      terrain: { source: 'terrain', exaggeration: 1.5 },
+    },
+    center: [r0.lng, r0.lat],
+    zoom:   r0.zoom,
+    pitch:  70,
+    bearing: 0,
+    antialias: true,
+    maxPitch: 85,
+  });
+
+  // ── Three.js custom layer ──────────────────────────────────
+  const layer = {
+    id: '3d-aircraft',
+    type: 'custom',
+    renderingMode: '3d',
+
+    onAdd(map, gl) {
+      threeRenderer = new THREE.WebGLRenderer({
+        canvas: map.getCanvas(), context: gl, antialias: true,
+      });
+      threeRenderer.autoClear = false;
+      threeRenderer.outputColorSpace = THREE.SRGBColorSpace;
+
+      camera = new THREE.Camera();
+      scene  = new THREE.Scene();
+      scene.add(new THREE.AmbientLight(0xffffff, 0.75));
+      const sun = new THREE.DirectionalLight(0xfff0dd, 0.9);
+      sun.position.set(1, 0.5, 2);
+      scene.add(sun);
+    },
+
+    render(gl, mercatorMatrix) {
+      camera.projectionMatrix = new THREE.Matrix4().fromArray(mercatorMatrix);
+      camera.projectionMatrixInverse.copy(camera.projectionMatrix).invert();
+      threeRenderer.resetState();
+      threeRenderer.render(scene, camera);
+      refreshLabels();
+      map.triggerRepaint();
+    },
+  };
+
+  map.on('load', () => {
+    map.addLayer(layer);
+    document.getElementById('splash').classList.add('gone');
+    fetchAndUpdate();
+    setInterval(fetchAndUpdate, 15_000);
+  });
+
+  map.getCanvas().addEventListener('click', handleClick);
+}
+
+// ─────────────────────────────────────────────────────────────
+// Labels
+// ─────────────────────────────────────────────────────────────
+function refreshLabels() {
+  const showLabels = map.getZoom() > 5.8;
+  for (const [icao, d] of flightData) {
+    const el = labelEls.get(icao);
+    if (!el || d.lon == null) { if (el) el.style.display = 'none'; continue; }
+    if (!showLabels) { el.style.display = 'none'; continue; }
+    const pt = map.project([d.lon, d.lat]);
+    el.style.display = '';
+    el.style.left = pt.x + 'px';
+    el.style.top  = pt.y + 'px';
   }
 }
 
-// ──────────────────────────────────────────────────────────────
-// Update loop
-// ──────────────────────────────────────────────────────────────
-async function update() {
+function addLabel(icao, callsign, type) {
+  const el = document.createElement('div');
+  el.className = 'ac-label';
+  el.dataset.type = type;
+  el.textContent = callsign;
+  document.getElementById('labels').appendChild(el);
+  labelEls.set(icao, el);
+}
+
+function removeLabel(icao) {
+  const el = labelEls.get(icao);
+  if (el) { el.remove(); labelEls.delete(icao); }
+}
+
+// ─────────────────────────────────────────────────────────────
+// Click detection (2-D screen-space proximity)
+// ─────────────────────────────────────────────────────────────
+function handleClick(e) {
+  if (!scene) return;
+  const rect = map.getCanvas().getBoundingClientRect();
+  const mx = e.clientX - rect.left;
+  const my = e.clientY - rect.top;
+  let best = null, bestD = 42;
+
+  for (const [icao, d] of flightData) {
+    if (d.lon == null) continue;
+    const pt = map.project([d.lon, d.lat]);
+    const dist = Math.hypot(mx - pt.x, my - pt.y);
+    if (dist < bestD) { bestD = dist; best = icao; }
+  }
+
+  if (best) showInfo(flightData.get(best));
+  else document.getElementById('info-panel').classList.remove('open');
+}
+
+function showInfo(d) {
+  const TYPE_LABEL = { jet: 'Jet airliner', turboprop: 'Turboprop / GA', helicopter: 'Helicopter' };
+  document.getElementById('i-cs').textContent    = d.callsign || d.icao || '—';
+  document.getElementById('i-ctry').textContent  = d.country || 'Unknown';
+  document.getElementById('i-type').textContent  = TYPE_LABEL[d.type] || d.type;
+  document.getElementById('i-icao').textContent  = (d.icao || '').toUpperCase();
+  document.getElementById('i-alt').textContent   = fmtFt(d.alt);
+  document.getElementById('i-spd').textContent   = fmtKts(d.speedMs);
+  document.getElementById('i-hdg').textContent   = fmtHdg(d.heading);
+  document.getElementById('i-ctry2').textContent = d.country || '—';
+  document.getElementById('info-panel').classList.add('open');
+}
+
+// ─────────────────────────────────────────────────────────────
+// Data fetching + scene update
+// ─────────────────────────────────────────────────────────────
+async function fetchAndUpdate() {
+  if (!scene) return;
   setStatus('load', 'Fetching flight data…');
 
-  const states = await fetchStates(currentRegion);
-  if (!states) {
+  let states;
+  try {
+    const r = await fetch(`/api/flights?region=${currentRegion}`, {
+      signal: AbortSignal.timeout(18_000),
+    });
+    const j = await r.json();
+    if (j.error) throw new Error(j.error);
+    states = j.states ?? [];
+  } catch (e) {
+    console.warn('[flights]', e.message);
     setStatus('err', 'Could not reach OpenSky — retrying in 15 s');
     return;
   }
 
-  const flights = [];
-  const trails  = [];
-  const seen    = new Set();
-  let   count   = 0;
+  const seen  = new Set();
+  const MAX   = 2_000;
+  let   count = 0;
 
   for (const s of states) {
-    if (count >= CFG.maxFlights) break;
+    if (count >= MAX) break;
     const icao     = s[0];
     const callsign = (s[1] ?? '').trim() || icao;
     const country  = s[2] ?? 'Unknown';
     const lon      = s[5], lat = s[6];
     const baroAlt  = s[7], onGround = s[8];
     const speedMs  = s[9], heading  = s[10];
-    const alt      = baroAlt ?? s[13] ?? 0;
+    const alt      = Math.max(baroAlt ?? s[13] ?? 0, 150);
 
     if (lon == null || lat == null || onGround) continue;
     if (Math.abs(lon) > 180 || Math.abs(lat) > 90) continue;
 
     seen.add(icao); count++;
+    const type = classify(speedMs, alt);
+    flightData.set(icao, { icao, callsign, country, lon, lat, alt, speedMs, heading, type });
 
-    // Altitude-based colour: orange at low → white-blue at cruise
-    const ratio = Math.min(alt / 12_000, 1);
-    const color  = `rgb(255,${Math.round(102 + 153 * ratio)},${Math.round(255 * ratio)})`;
+    if (!aircraftMeshes.has(icao)) {
+      const grp = makeGroup(type);
+      scene.add(grp);
+      aircraftMeshes.set(icao, grp);
+      addLabel(icao, callsign, type);
+    }
 
-    flights.push({ icao, callsign, country, lat, lon, alt, speedMs, heading, color });
-
-    const hist = trailHistory.get(icao) ?? [];
-    hist.push({ lat, lon, alt });
-    if (hist.length > CFG.maxTrail) hist.shift();
-    trailHistory.set(icao, hist);
-    if (hist.length >= 2) trails.push({ icao, points: [...hist] });
+    placeGroup(aircraftMeshes.get(icao), lon, lat, alt, heading ?? 0);
   }
 
-  for (const id of trailHistory.keys()) if (!seen.has(id)) trailHistory.delete(id);
+  // Cull departed aircraft
+  for (const [icao, grp] of aircraftMeshes) {
+    if (!seen.has(icao)) {
+      scene.remove(grp);
+      grp.traverse(o => { if (o.geometry) o.geometry.dispose(); });
+      aircraftMeshes.delete(icao);
+      flightData.delete(icao);
+      removeLabel(icao);
+    }
+  }
 
-  world.pointsData(flights).pathsData(trails);
-
-  const now = new Date();
-  document.getElementById('hdr-count').textContent = flights.length.toLocaleString();
-  document.getElementById('hdr-time').textContent  = now.toLocaleTimeString([], { hour:'2-digit', minute:'2-digit', second:'2-digit' });
-  setStatus('ok', `${flights.length.toLocaleString()} aircraft · next update in 15 s`);
+  document.getElementById('hdr-count').textContent = count.toLocaleString();
+  document.getElementById('hdr-time').textContent  =
+    new Date().toLocaleTimeString([], { hour:'2-digit', minute:'2-digit', second:'2-digit' });
+  setStatus('ok', `${count.toLocaleString()} aircraft · refreshes every 15 s`);
 }
 
-// ──────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────
+// Helpers
+// ─────────────────────────────────────────────────────────────
+function fmtFt(m)  { return m != null ? `${Math.round(m * 3.28084).toLocaleString()} ft` : 'N/A'; }
+function fmtKts(s) { return s != null ? `${Math.round(s * 1.944)} kts` : 'N/A'; }
+function fmtHdg(d) {
+  if (d == null) return 'N/A';
+  return `${Math.round(d)}° ${['N','NE','E','SE','S','SW','W','NW'][Math.round(d/45)%8]}`;
+}
+function setStatus(type, msg) {
+  document.getElementById('s-dot').className = 's-dot' + (type !== 'ok' ? ` ${type}` : '');
+  document.getElementById('status-msg').textContent = msg;
+}
+
+// ─────────────────────────────────────────────────────────────
 // Region buttons
-// ──────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────
 document.querySelectorAll('.rbtn').forEach(btn => {
   btn.addEventListener('click', function () {
     if (this.dataset.region === currentRegion) return;
     document.querySelectorAll('.rbtn').forEach(b => b.classList.remove('active'));
     this.classList.add('active');
     currentRegion = this.dataset.region;
-    trailHistory.clear();
-    world.pathsData([]);
+
+    // Clear scene
+    for (const [icao, grp] of aircraftMeshes) {
+      if (scene) scene.remove(grp);
+      removeLabel(icao);
+    }
+    aircraftMeshes.clear();
+    flightData.clear();
+
     const r = REGIONS[currentRegion];
-    world.pointOfView({ lat: r.lat, lng: r.lng, altitude: r.alt }, 1200);
-    update();
+    map.easeTo({ center: [r.lng, r.lat], zoom: r.zoom, pitch: 70, duration: 1200 });
+    fetchAndUpdate();
   });
 });
 
-// ──────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────
 // Control buttons
-// ──────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────
 document.getElementById('info-close').addEventListener('click', () =>
   document.getElementById('info-panel').classList.remove('open')
 );
-
 document.getElementById('btn-home').addEventListener('click', () => {
   const r = REGIONS[currentRegion];
-  world.pointOfView({ lat: r.lat, lng: r.lng, altitude: r.alt }, 1000);
+  map.easeTo({ center: [r.lng, r.lat], zoom: r.zoom, pitch: 70, duration: 1000 });
 });
+document.getElementById('btn-tilt-up').addEventListener('click', () =>
+  map.easeTo({ pitch: Math.min(map.getPitch() + 12, 85) })
+);
+document.getElementById('btn-tilt-dn').addEventListener('click', () =>
+  map.easeTo({ pitch: Math.max(map.getPitch() - 12, 0) })
+);
 
-let spinning = false;
+let spinning = false, spinRaf = null;
 document.getElementById('btn-spin').addEventListener('click', function () {
   spinning = !spinning;
   this.classList.toggle('active', spinning);
-  world.controls().autoRotate      = spinning;
-  world.controls().autoRotateSpeed = 0.5;
+  if (spinning) {
+    (function tick() {
+      if (!spinning) return;
+      map.setBearing((map.getBearing() + 0.25) % 360);
+      spinRaf = requestAnimationFrame(tick);
+    })();
+  } else {
+    cancelAnimationFrame(spinRaf);
+  }
 });
 
-document.getElementById('btn-day').addEventListener('click', function () {
-  nightMode = !nightMode;
-  this.classList.toggle('active', !nightMode);
-  world.globeImageUrl(nightMode ? EARTH_NIGHT : EARTH_DAY);
-});
-
-// ──────────────────────────────────────────────────────────────
-// Start
-// ──────────────────────────────────────────────────────────────
-update();
-setInterval(update, CFG.refreshMs);
+// ─────────────────────────────────────────────────────────────
+// Boot
+// ─────────────────────────────────────────────────────────────
+initMap();
 </script>
 </body>
 </html>
