@@ -179,15 +179,14 @@
 <script>
 // ── config ────────────────────────────────────────────────────
 const REFRESH_MS = 15000;
-// MODEL_M: metres per geometry unit. Raised to 18000 so models are clearly
-// visible at zoom 4-6 across all military regions.
-const MODEL_M  = 18000;
-// ALT_EXAG: vertical scale factor applied to barometric altitude so aircraft
-// sit well above terrain at normal map zoom levels.
-const ALT_EXAG = 8;
-// MIN_DISPLAY_ALT_M: floor altitude in metres so aircraft with unknown or
-// near-zero altitude still appear clearly above the globe surface.
-const MIN_DISPLAY_ALT_M = 8000;
+// MODEL_PX: target screen-pixels per geometry unit.
+// Using a screen-space constant keeps models visible at every zoom level
+// (fixed-physical-size blows up to thousands of px when zoomed in).
+const MODEL_PX    = 12;
+// Altitude clamped to [MIN_ALT_PX … MAX_ALT_PX] screen-pixel equivalents
+// so aircraft are always on-screen regardless of zoom or reported altitude.
+const MIN_ALT_PX  = 25;
+const MAX_ALT_PX  = 160;
 
 const REGION_VIEWS = {
   middle_east:   { center: [45,  27], zoom: 5.5, pitch: 72 },
@@ -495,16 +494,30 @@ const threeLayer = (() => {
       // Model sits at origin; camera encodes its position + heading.
       M4.fromArray(mercatorMatrix);
 
+      // Screen-space scale: MODEL_PX pixels per geometry unit at every zoom.
+      // 512 * 2^zoom = mercator pixels per world unit (standard MapLibre tile math).
+      const pxPerMercator = 512 * Math.pow(2, map.getZoom());
+      const s = MODEL_PX / pxPerMercator;
+
       for (const [, d] of flightMap) {
         if (d.onGround) continue;
         const sc = tpl[d.kind];
         if (!sc) continue;
 
-        const mc = maplibregl.MercatorCoordinate.fromLngLat([d.lon, d.lat], d.displayAltM);
-        const s  = mc.meterInMercatorCoordinateUnits() * MODEL_M;
-        const θ  = THREE.MathUtils.degToRad(d.track || 0) - Math.PI / 2;
+        // Ground position
+        const mc = maplibregl.MercatorCoordinate.fromLngLat([d.lon, d.lat], 0);
 
-        Lt.makeTranslation(mc.x, mc.y, mc.z);
+        // Altitude: clamp to [MIN_ALT_PX … MAX_ALT_PX] screen-pixel equivalents
+        // so the model is always on-screen regardless of zoom or actual altitude.
+        const physPx = d.altFt != null
+          ? d.altFt * 0.3048 * mc.meterInMercatorCoordinateUnits() * pxPerMercator
+          : 0;
+        const altPx  = Math.min(Math.max(physPx, MIN_ALT_PX), MAX_ALT_PX);
+        const altZ   = altPx / pxPerMercator;
+
+        const θ = THREE.MathUtils.degToRad(d.track || 0) - Math.PI / 2;
+
+        Lt.makeTranslation(mc.x, mc.y, altZ);
         Rz.makeRotationZ(θ);
         Sc.makeScale(s, -s, s); // −s on Y: mercator Y is south-positive (inverted)
 
@@ -634,10 +647,9 @@ async function fetchAndUpdate() {
       const altFt    = typeof s.alt_baro === 'number' ? s.alt_baro
                      : typeof s.altitude  === 'number' ? s.altitude : null;
       const onGround = s.alt_baro === 'ground' || s.on_ground === true || s.on_ground === 1;
-      const displayAltM = onGround ? 0 : Math.max((altFt ?? 20000) * 0.3048 * ALT_EXAG, MIN_DISPLAY_ALT_M);
 
       const d = {
-        hex, lat, lon, altFt, displayAltM, onGround,
+        hex, lat, lon, altFt, onGround,
         gs:       s.gs      ?? s.velocity    ?? null,
         track:    s.track   ?? s.true_track  ?? null,
         callsign: (s.flight ?? s.callsign    ?? '').trim(),
