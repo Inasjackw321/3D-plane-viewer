@@ -16,63 +16,72 @@
 
     #globe { width: 100%; height: 100%; }
 
-    /* ── overlay shell ───────────────────────────────────────── */
-    #overlay {
-      position: fixed; inset: 0;
-      pointer-events: none;
-      z-index: 10;
-    }
+    /* ── overlay ─────────────────────────────────────────────── */
+    #overlay { position: fixed; inset: 0; pointer-events: none; z-index: 10; }
 
     /* ── header ──────────────────────────────────────────────── */
     #header {
-      position: absolute;
-      top: 16px; left: 50%;
+      position: absolute; top: 16px; left: 50%;
       transform: translateX(-50%);
-      display: flex; align-items: center; gap: 18px;
-      background: rgba(4, 8, 20, 0.82);
-      border: 1px solid rgba(80, 160, 255, 0.22);
-      border-radius: 14px;
-      padding: 10px 22px;
+      display: flex; align-items: center; gap: 16px;
+      background: rgba(4,8,20,.84);
+      border: 1px solid rgba(80,160,255,.22);
+      border-radius: 14px; padding: 10px 20px;
       backdrop-filter: blur(14px);
-      pointer-events: all;
-      white-space: nowrap;
-      user-select: none;
+      pointer-events: all; white-space: nowrap; user-select: none;
     }
-    #header h1 {
-      font-size: 15px; font-weight: 700;
-      color: #fff; letter-spacing: 1px; text-transform: uppercase;
-    }
+    #header h1 { font-size: 14px; font-weight: 700; color: #fff; letter-spacing: 1px; text-transform: uppercase; }
     #header h1 .live { color: #ff5500; }
-    .hdiv { width: 1px; height: 28px; background: rgba(255,255,255,0.1); }
+    .hdiv { width: 1px; height: 26px; background: rgba(255,255,255,.1); }
     .stat { display: flex; flex-direction: column; align-items: center; gap: 1px; }
-    .stat-v { font-size: 18px; font-weight: 800; color: #ff6620; line-height: 1; }
-    .stat-l { font-size: 9px; color: rgba(255,255,255,0.38); text-transform: uppercase; letter-spacing: 1px; }
+    .stat-v { font-size: 17px; font-weight: 800; color: #ff6620; line-height: 1; }
+    .stat-l { font-size: 9px; color: rgba(255,255,255,.38); text-transform: uppercase; letter-spacing: 1px; }
+
+    /* ── region pill strip ───────────────────────────────────── */
+    #regions {
+      position: absolute; top: 72px; left: 50%;
+      transform: translateX(-50%);
+      display: flex; gap: 6px;
+      pointer-events: all;
+    }
+    .rbtn {
+      padding: 5px 13px;
+      background: rgba(4,8,20,.78);
+      border: 1px solid rgba(80,160,255,.22);
+      border-radius: 20px;
+      color: rgba(255,255,255,.55);
+      font-size: 11px; font-weight: 600;
+      cursor: pointer; white-space: nowrap;
+      backdrop-filter: blur(10px);
+      transition: background .15s, border-color .15s, color .15s;
+    }
+    .rbtn:hover  { background: rgba(255,85,0,.2);  border-color: rgba(255,85,0,.5); color: #fff; }
+    .rbtn.active { background: rgba(255,85,0,.32); border-color: #ff5500;           color: #fff; }
 
     /* ── info panel ──────────────────────────────────────────── */
     #info-panel {
-      position: absolute; top: 70px; right: 16px;
-      width: 250px;
-      background: rgba(4, 8, 20, 0.88);
-      border: 1px solid rgba(80, 160, 255, 0.25);
+      position: absolute; top: 112px; right: 16px;
+      width: 248px;
+      background: rgba(4,8,20,.9);
+      border: 1px solid rgba(80,160,255,.25);
       border-radius: 14px; padding: 16px;
-      pointer-events: all;
-      backdrop-filter: blur(14px);
+      pointer-events: all; backdrop-filter: blur(14px);
       display: none;
     }
     #info-panel.open { display: block; }
     #info-close {
       position: absolute; top: 9px; right: 12px;
       background: none; border: none;
-      color: rgba(255,255,255,0.3); cursor: pointer;
+      color: rgba(255,255,255,.3); cursor: pointer;
       font-size: 20px; line-height: 1; padding: 2px 5px;
       transition: color .15s;
     }
     #info-close:hover { color: #fff; }
-    .i-cs   { font-size: 24px; font-weight: 800; color: #fff; margin-bottom: 2px; }
-    .i-ctry { font-size: 11px; color: rgba(255,255,255,0.36); margin-bottom: 12px; }
+    .i-cs   { font-size: 23px; font-weight: 800; color: #fff; margin-bottom: 2px; }
+    .i-ctry { font-size: 11px; color: rgba(255,255,255,.36); margin-bottom: 12px; }
     .i-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
     .i-cell label {
-      display: block; font-size: 9px; color: rgba(255,255,255,0.36);
+      display: block; font-size: 9px; color: rgba(255,255,255,.36);
       text-transform: uppercase; letter-spacing: .9px; margin-bottom: 2px;
     }
     .i-cell span { font-size: 14px; font-weight: 700; color: #ff8844; }
@@ -85,9 +94,9 @@
     }
     .ctl {
       width: 38px; height: 38px;
-      background: rgba(4, 8, 20, 0.82);
-      border: 1px solid rgba(80, 160, 255, 0.22);
-      border-radius: 9px; color: rgba(255,255,255,0.6);
+      background: rgba(4,8,20,.82);
+      border: 1px solid rgba(80,160,255,.22);
+      border-radius: 9px; color: rgba(255,255,255,.6);
       cursor: pointer; font-size: 17px;
       display: flex; align-items: center; justify-content: center;
       backdrop-filter: blur(10px);
@@ -101,11 +110,10 @@
       position: absolute; bottom: 14px; left: 50%;
       transform: translateX(-50%);
       display: flex; align-items: center; gap: 7px;
-      background: rgba(4, 8, 20, 0.72);
-      border: 1px solid rgba(80, 160, 255, 0.15);
+      background: rgba(4,8,20,.72);
+      border: 1px solid rgba(80,160,255,.15);
       border-radius: 20px; padding: 5px 14px;
-      pointer-events: none;
-      backdrop-filter: blur(8px);
+      pointer-events: none; backdrop-filter: blur(8px);
     }
     .s-dot {
       width: 7px; height: 7px; border-radius: 50%; background: #00e87a;
@@ -115,12 +123,11 @@
     .s-dot.err  { background: #ff4040; animation: none; }
     .s-dot.load { background: #4499ff; animation: none; }
     @keyframes blink { 0%,100%{opacity:1}50%{opacity:.2} }
-    #status-msg { font-size: 11px; color: rgba(255,255,255,0.48); }
+    #status-msg { font-size: 11px; color: rgba(255,255,255,.48); }
 
-    /* ── loading splash ──────────────────────────────────────── */
+    /* ── splash ──────────────────────────────────────────────── */
     #splash {
-      position: fixed; inset: 0;
-      background: #010409;
+      position: fixed; inset: 0; background: #010409;
       display: flex; flex-direction: column;
       align-items: center; justify-content: center; gap: 14px;
       z-index: 999; transition: opacity .5s;
@@ -130,21 +137,19 @@
       width: 42px; height: 42px;
       border: 3px solid rgba(255,85,0,.18);
       border-top-color: #ff5500; border-radius: 50%;
-      animation: rotate .8s linear infinite;
+      animation: rot .8s linear infinite;
     }
-    @keyframes rotate { to { transform: rotate(360deg); } }
+    @keyframes rot { to { transform: rotate(360deg); } }
     #splash p { font-size: 13px; color: rgba(255,255,255,.42); }
 
-    /* ── globe.gl tooltip override ───────────────────────────── */
-    .globe-tooltip {
-      background: rgba(4,8,20,0.88) !important;
-      border: 1px solid rgba(80,160,255,0.28) !important;
+    /* ── globe.gl tooltip ────────────────────────────────────── */
+    .globe-tip {
+      background: rgba(4,8,20,.9) !important;
+      border: 1px solid rgba(80,160,255,.28) !important;
       border-radius: 10px !important;
       padding: 8px 12px !important;
-      font-size: 12px !important;
-      color: #fff !important;
-      pointer-events: none;
-      line-height: 1.5;
+      font-size: 12px !important; color: #fff !important;
+      pointer-events: none; line-height: 1.6;
     }
   </style>
 </head>
@@ -158,6 +163,7 @@
 </div>
 
 <div id="overlay">
+
   <div id="header">
     <h1>✈ <span class="live">LIVE</span> FLIGHTS</h1>
     <div class="hdiv"></div>
@@ -172,6 +178,16 @@
     </div>
   </div>
 
+  <!-- Region selector -->
+  <div id="regions">
+    <button class="rbtn active" data-region="middle_east">Middle East</button>
+    <button class="rbtn"        data-region="europe">Europe</button>
+    <button class="rbtn"        data-region="north_america">N. America</button>
+    <button class="rbtn"        data-region="asia">Asia Pacific</button>
+    <button class="rbtn"        data-region="global">Global</button>
+  </div>
+
+  <!-- Flight info -->
   <div id="info-panel">
     <button id="info-close">×</button>
     <div class="i-cs"   id="i-cs">—</div>
@@ -185,36 +201,46 @@
   </div>
 
   <div id="controls">
-    <button class="ctl" id="btn-home"  title="Reset view">🌍</button>
-    <button class="ctl" id="btn-spin"  title="Auto-rotate">🔄</button>
-    <button class="ctl" id="btn-day"   title="Toggle day/night">🌓</button>
+    <button class="ctl" id="btn-home" title="Reset view">🌍</button>
+    <button class="ctl" id="btn-spin" title="Auto-rotate">🔄</button>
+    <button class="ctl" id="btn-day"  title="Toggle day/night">🌓</button>
   </div>
 
   <div id="status-bar">
     <div class="s-dot" id="s-dot"></div>
     <span id="status-msg">Initializing…</span>
   </div>
+
 </div>
 
 <script>
 // ──────────────────────────────────────────────────────────────
-// Config
+// Region config  (camera views + api key)
 // ──────────────────────────────────────────────────────────────
+const REGIONS = {
+  middle_east:   { lat: 27,  lng: 45,   alt: 1.5 },
+  europe:        { lat: 52,  lng: 15,   alt: 1.8 },
+  north_america: { lat: 38,  lng: -95,  alt: 1.8 },
+  asia:          { lat: 25,  lng: 105,  alt: 1.8 },
+  global:        { lat: 20,  lng: 0,    alt: 2.5 },
+};
+
 const CFG = {
   refreshMs:  15_000,
   maxTrail:   8,
   maxFlights: 6_000,
-  apiUrl:     'https://opensky-network.org/api/states/all',
 };
 
+let currentRegion = 'middle_east';
+
+// ──────────────────────────────────────────────────────────────
+// Globe
+// ──────────────────────────────────────────────────────────────
 const EARTH_NIGHT = '//unpkg.com/three-globe/example/img/earth-night.jpg';
 const EARTH_DAY   = '//unpkg.com/three-globe/example/img/earth-blue-marble.jpg';
 const EARTH_BUMP  = '//unpkg.com/three-globe/example/img/earth-topology.png';
 const SKY         = '//unpkg.com/three-globe/example/img/night-sky.png';
 
-// ──────────────────────────────────────────────────────────────
-// Globe setup
-// ──────────────────────────────────────────────────────────────
 const world = Globe()(document.getElementById('globe'))
   .globeImageUrl(EARTH_NIGHT)
   .bumpImageUrl(EARTH_BUMP)
@@ -222,7 +248,6 @@ const world = Globe()(document.getElementById('globe'))
   .showAtmosphere(true)
   .atmosphereColor('#1a66ff')
   .atmosphereAltitude(0.18)
-  // Points = aircraft
   .pointsData([])
   .pointLat('lat')
   .pointLng('lon')
@@ -230,14 +255,12 @@ const world = Globe()(document.getElementById('globe'))
   .pointColor('color')
   .pointRadius(0.28)
   .pointLabel(d =>
-    `<div class="globe-tooltip">
+    `<div class="globe-tip">
        <b style="color:#ff8844">${d.callsign}</b><br>
        ${d.country}<br>
        ${fmtFt(d.alt)} · ${fmtKts(d.speedMs)}
-     </div>`
-  )
+     </div>`)
   .onPointClick(showInfo)
-  // Paths = trails
   .pathsData([])
   .pathPoints('points')
   .pathPointLat(p => p.lat)
@@ -249,18 +272,16 @@ const world = Globe()(document.getElementById('globe'))
   .pathDashGap(0.006)
   .pathDashAnimateTime(8_000);
 
-// Initial camera – low angle over the Atlantic/East Coast
-world.pointOfView({ lat: 28, lng: -75, altitude: 1.9 }, 0);
+// Start looking at Middle East
+const r0 = REGIONS.middle_east;
+world.pointOfView({ lat: r0.lat, lng: r0.lng, altitude: r0.alt }, 0);
 
-// Hide splash once globe texture loads
-world.onGlobeReady(() => {
-  document.getElementById('splash').classList.add('gone');
-});
+world.onGlobeReady(() => document.getElementById('splash').classList.add('gone'));
 
 // ──────────────────────────────────────────────────────────────
 // State
 // ──────────────────────────────────────────────────────────────
-const trailHistory = new Map(); // icao → [{lat,lon,alt}, ...]
+const trailHistory = new Map();
 let nightMode = true;
 
 // ──────────────────────────────────────────────────────────────
@@ -273,12 +294,10 @@ function fmtHdg(d) {
   const dirs = ['N','NE','E','SE','S','SW','W','NW'];
   return `${Math.round(d)}° ${dirs[Math.round(d / 45) % 8]}`;
 }
-
 function setStatus(type, msg) {
   document.getElementById('s-dot').className = 's-dot' + (type !== 'ok' ? ` ${type}` : '');
   document.getElementById('status-msg').textContent = msg;
 }
-
 function showInfo(d) {
   if (!d) return;
   document.getElementById('i-cs').textContent   = d.callsign || d.icao || '—';
@@ -291,25 +310,32 @@ function showInfo(d) {
 }
 
 // ──────────────────────────────────────────────────────────────
-// OpenSky fetch + update
+// Fetch via local Python proxy (bypasses CORS)
 // ──────────────────────────────────────────────────────────────
-async function fetchStates() {
+async function fetchStates(region) {
   try {
-    const r = await fetch(CFG.apiUrl, { signal: AbortSignal.timeout(12_000) });
+    const r = await fetch(`/api/flights?region=${region}`, {
+      signal: AbortSignal.timeout(18_000),
+    });
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
-    return (await r.json()).states ?? [];
+    const j = await r.json();
+    if (j.error) throw new Error(j.error);
+    return j.states ?? [];
   } catch (e) {
     console.warn('[flights]', e.message);
     return null;
   }
 }
 
+// ──────────────────────────────────────────────────────────────
+// Update loop
+// ──────────────────────────────────────────────────────────────
 async function update() {
   setStatus('load', 'Fetching flight data…');
 
-  const states = await fetchStates();
+  const states = await fetchStates(currentRegion);
   if (!states) {
-    setStatus('err', 'API unavailable — retrying in 15 s');
+    setStatus('err', 'Could not reach OpenSky — retrying in 15 s');
     return;
   }
 
@@ -320,66 +346,70 @@ async function update() {
 
   for (const s of states) {
     if (count >= CFG.maxFlights) break;
-
     const icao     = s[0];
     const callsign = (s[1] ?? '').trim() || icao;
     const country  = s[2] ?? 'Unknown';
-    const lon      = s[5];
-    const lat      = s[6];
-    const baroAlt  = s[7];
-    const onGround = s[8];
-    const speedMs  = s[9];
-    const heading  = s[10];
-    const geoAlt   = s[13];
-    const alt      = baroAlt ?? geoAlt ?? 0;
+    const lon      = s[5], lat = s[6];
+    const baroAlt  = s[7], onGround = s[8];
+    const speedMs  = s[9], heading  = s[10];
+    const alt      = baroAlt ?? s[13] ?? 0;
 
     if (lon == null || lat == null || onGround) continue;
     if (Math.abs(lon) > 180 || Math.abs(lat) > 90) continue;
 
-    seen.add(icao);
-    count++;
+    seen.add(icao); count++;
 
-    // altitude-based colour: high=white → low=orange
+    // Altitude-based colour: orange at low → white-blue at cruise
     const ratio = Math.min(alt / 12_000, 1);
-    const r = Math.round(255);
-    const g = Math.round(102 + 153 * ratio);
-    const b = Math.round(0   + 255 * ratio);
-    const color = `rgb(${r},${g},${b})`;
+    const color  = `rgb(255,${Math.round(102 + 153 * ratio)},${Math.round(255 * ratio)})`;
 
     flights.push({ icao, callsign, country, lat, lon, alt, speedMs, heading, color });
 
-    // Trail history
     const hist = trailHistory.get(icao) ?? [];
     hist.push({ lat, lon, alt });
     if (hist.length > CFG.maxTrail) hist.shift();
     trailHistory.set(icao, hist);
-
     if (hist.length >= 2) trails.push({ icao, points: [...hist] });
   }
 
-  // Evict departed aircraft from history
-  for (const id of trailHistory.keys()) {
-    if (!seen.has(id)) trailHistory.delete(id);
-  }
+  for (const id of trailHistory.keys()) if (!seen.has(id)) trailHistory.delete(id);
 
   world.pointsData(flights).pathsData(trails);
 
   const now = new Date();
   document.getElementById('hdr-count').textContent = flights.length.toLocaleString();
   document.getElementById('hdr-time').textContent  = now.toLocaleTimeString([], { hour:'2-digit', minute:'2-digit', second:'2-digit' });
-  setStatus('ok', `${flights.length.toLocaleString()} aircraft · auto-refreshes every 15 s`);
+  setStatus('ok', `${flights.length.toLocaleString()} aircraft · next update in 15 s`);
 }
 
 // ──────────────────────────────────────────────────────────────
-// Controls
+// Region buttons
+// ──────────────────────────────────────────────────────────────
+document.querySelectorAll('.rbtn').forEach(btn => {
+  btn.addEventListener('click', function () {
+    if (this.dataset.region === currentRegion) return;
+    document.querySelectorAll('.rbtn').forEach(b => b.classList.remove('active'));
+    this.classList.add('active');
+    currentRegion = this.dataset.region;
+    trailHistory.clear();
+    world.pathsData([]);
+    const r = REGIONS[currentRegion];
+    world.pointOfView({ lat: r.lat, lng: r.lng, altitude: r.alt }, 1200);
+    update();
+  });
+});
+
+// ──────────────────────────────────────────────────────────────
+// Control buttons
 // ──────────────────────────────────────────────────────────────
 document.getElementById('info-close').addEventListener('click', () =>
   document.getElementById('info-panel').classList.remove('open')
 );
 
-document.getElementById('btn-home').addEventListener('click', () =>
-  world.pointOfView({ lat: 28, lng: -75, altitude: 1.9 }, 1000)
-);
+document.getElementById('btn-home').addEventListener('click', () => {
+  const r = REGIONS[currentRegion];
+  world.pointOfView({ lat: r.lat, lng: r.lng, altitude: r.alt }, 1000);
+});
 
 let spinning = false;
 document.getElementById('btn-spin').addEventListener('click', function () {
