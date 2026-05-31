@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Live 3D Flight Tracker
-Proxies adsb.fi (free, no auth) to avoid browser CORS restrictions.
+Fetches all aircraft from adsb.fi and filters by bounding box server-side.
 """
 import http.server
 import socketserver
@@ -15,14 +15,14 @@ import os
 PORT = 3000
 HOST = "localhost"
 
-ADSB_FI = "https://api.adsb.fi/v1"
+ADSB_FI = "https://api.adsb.fi/v1/flights"
 
-# Center + radius (nautical miles) per region
-REGIONS = {
-    "middle_east":   (27,  45,  1500),
-    "europe":        (51,  13,  1800),
-    "north_america": (38, -95,  2200),
-    "asia":          (30, 110,  2200),
+# (lat-min, lon-min, lat-max, lon-max)
+BBOXES = {
+    "middle_east":   (12,  32,  42,  63),
+    "europe":        (35, -12,  72,  45),
+    "north_america": (24, -125, 50, -66),
+    "asia":          (-10, 60,  55, 150),
     "global":        None,
 }
 
@@ -37,32 +37,41 @@ class Handler(http.server.SimpleHTTPRequestHandler):
     def _proxy(self):
         qs     = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
         region = qs.get("region", ["global"])[0]
-        rp     = REGIONS.get(region)
-
-        if rp:
-            lat, lng, radius = rp
-            url = f"{ADSB_FI}/aircraft?lat={lat}&lng={lng}&radius={radius}"
-        else:
-            url = f"{ADSB_FI}/flights"
+        bbox   = BBOXES.get(region)
 
         try:
             req = urllib.request.Request(
-                url,
+                ADSB_FI,
                 headers={"User-Agent": "FlightTracker/1.0",
-                         "Accept": "application/json"},
+                         "Accept":     "application/json"},
             )
-            with urllib.request.urlopen(req, timeout=20) as resp:
-                data = resp.read()
+            with urllib.request.urlopen(req, timeout=25) as resp:
+                raw = json.loads(resp.read())
+
+            # adsb.fi returns { "aircraft": [...] } or { "ac": [...] }
+            aircraft = raw.get("aircraft") or raw.get("ac") or []
+
+            if bbox:
+                lamin, lomin, lamax, lomax = bbox
+                aircraft = [
+                    a for a in aircraft
+                    if isinstance(a.get("lat"), (int, float))
+                    and isinstance(a.get("lon"), (int, float))
+                    and lamin <= a["lat"] <= lamax
+                    and lomin <= a["lon"] <= lomax
+                ]
+
+            out = json.dumps({"aircraft": aircraft}).encode()
             code = 200
         except Exception as e:
-            data = json.dumps({"error": str(e), "aircraft": []}).encode()
+            out  = json.dumps({"error": str(e), "aircraft": []}).encode()
             code = 200
 
         self.send_response(code)
-        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Type",  "application/json")
         self.send_header("Access-Control-Allow-Origin", "*")
         self.end_headers()
-        self.wfile.write(data)
+        self.wfile.write(out)
 
     def log_message(self, *_):
         pass
