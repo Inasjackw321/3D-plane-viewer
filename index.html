@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Live 3D Flight Tracker</title>
+  <script src="https://cesium.com/downloads/cesiumjs/releases/1.115/Build/Cesium/Cesium.js"></script>
+  <link href="https://cesium.com/downloads/cesiumjs/releases/1.115/Build/Cesium/Widgets/widgets.css" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    html, body {
+      width: 100%; height: 100%; overflow: hidden;
+      background: #000;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
+
+    #cesiumContainer { width: 100%; height: 100%; }
+
+    /* Hide Cesium's built-in UI chrome */
+    .cesium-viewer-toolbar,
+    .cesium-widget-credits { display: none !important; }
+
+    /* ── Overlay shell ─────────────────────────────────────── */
+    #overlay {
+      position: fixed; inset: 0;
+      pointer-events: none;
+      z-index: 10;
+    }
+
+    /* ── Header ─────────────────────────────────────────────── */
+    #header {
+      position: absolute;
+      top: 16px; left: 50%;
+      transform: translateX(-50%);
+      display: flex; align-items: center; gap: 18px;
+      background: rgba(4, 8, 18, 0.82);
+      border: 1px solid rgba(80, 160, 255, 0.25);
+      border-radius: 14px;
+      padding: 10px 22px;
+      backdrop-filter: blur(14px);
+      pointer-events: all;
+      white-space: nowrap;
+    }
+
+    #header h1 {
+      font-size: 15px; font-weight: 700;
+      color: #fff; letter-spacing: 1px;
+      text-transform: uppercase;
+    }
+
+    #header h1 .live { color: #ff5500; }
+
+    .hdr-divider { width: 1px; height: 28px; background: rgba(255,255,255,0.12); }
+
+    .stat { display: flex; flex-direction: column; align-items: center; gap: 1px; }
+    .stat-val { font-size: 18px; font-weight: 800; color: #ff6620; line-height: 1; }
+    .stat-lbl { font-size: 9px; color: rgba(255,255,255,0.4); text-transform: uppercase; letter-spacing: 1px; }
+
+    /* ── Right sidebar – flight info ────────────────────────── */
+    #info-panel {
+      position: absolute;
+      top: 72px; right: 16px;
+      width: 252px;
+      background: rgba(4, 8, 18, 0.88);
+      border: 1px solid rgba(80, 160, 255, 0.28);
+      border-radius: 14px;
+      padding: 16px;
+      pointer-events: all;
+      backdrop-filter: blur(14px);
+      display: none;
+    }
+    #info-panel.open { display: block; }
+
+    #info-close {
+      position: absolute; top: 9px; right: 12px;
+      background: none; border: none;
+      color: rgba(255,255,255,0.35); cursor: pointer;
+      font-size: 20px; line-height: 1; padding: 2px 5px;
+      transition: color .15s;
+    }
+    #info-close:hover { color: #fff; }
+
+    .i-callsign { font-size: 24px; font-weight: 800; color: #fff; margin-bottom: 2px; }
+    .i-country  { font-size: 11px; color: rgba(255,255,255,0.38); margin-bottom: 12px; }
+
+    .i-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .i-cell label {
+      display: block; font-size: 9px;
+      color: rgba(255,255,255,0.38);
+      text-transform: uppercase; letter-spacing: .9px;
+      margin-bottom: 2px;
+    }
+    .i-cell span { font-size: 14px; font-weight: 700; color: #ff8844; }
+
+    /* ── Bottom-right controls ──────────────────────────────── */
+    #controls {
+      position: absolute; bottom: 56px; right: 16px;
+      display: flex; flex-direction: column; gap: 6px;
+      pointer-events: all;
+    }
+
+    .ctl {
+      width: 38px; height: 38px;
+      background: rgba(4, 8, 18, 0.82);
+      border: 1px solid rgba(80, 160, 255, 0.25);
+      border-radius: 9px;
+      color: rgba(255,255,255,0.65);
+      cursor: pointer; font-size: 17px;
+      display: flex; align-items: center; justify-content: center;
+      backdrop-filter: blur(10px);
+      transition: background .15s, border-color .15s, color .15s;
+    }
+    .ctl:hover     { background: rgba(255,85,0,0.22); border-color: #ff5500; color: #fff; }
+    .ctl.active    { background: rgba(255,85,0,0.35); border-color: #ff5500; color: #fff; }
+
+    /* ── Status bar ─────────────────────────────────────────── */
+    #status-bar {
+      position: absolute; bottom: 14px; left: 50%;
+      transform: translateX(-50%);
+      display: flex; align-items: center; gap: 7px;
+      background: rgba(4, 8, 18, 0.72);
+      border: 1px solid rgba(80, 160, 255, 0.18);
+      border-radius: 20px;
+      padding: 5px 14px;
+      pointer-events: none;
+      backdrop-filter: blur(8px);
+    }
+
+    .s-dot {
+      width: 7px; height: 7px; border-radius: 50%;
+      background: #00e87a;
+      animation: blink 2s ease-in-out infinite;
+    }
+    .s-dot.warn  { background: #ffaa00; animation: none; }
+    .s-dot.err   { background: #ff4040; animation: none; }
+    .s-dot.load  { background: #4499ff; animation: none; }
+
+    @keyframes blink { 0%,100% { opacity:1; } 50% { opacity:.25; } }
+
+    #status-msg { font-size: 11px; color: rgba(255,255,255,0.5); }
+
+    /* ── Initial loading screen ─────────────────────────────── */
+    #loading-screen {
+      position: fixed; inset: 0;
+      background: #010409;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center; gap: 14px;
+      z-index: 999;
+      transition: opacity .6s;
+    }
+    #loading-screen.gone { opacity: 0; pointer-events: none; }
+
+    .spin {
+      width: 44px; height: 44px;
+      border: 3px solid rgba(255,85,0,0.18);
+      border-top-color: #ff5500;
+      border-radius: 50%;
+      animation: rotate .8s linear infinite;
+    }
+    @keyframes rotate { to { transform: rotate(360deg); } }
+
+    #loading-screen p { font-size: 13px; color: rgba(255,255,255,0.45); }
+  </style>
+</head>
+<body>
+
+<!-- 3-D globe -->
+<div id="cesiumContainer"></div>
+
+<!-- Loading splash -->
+<div id="loading-screen">
+  <div class="spin"></div>
+  <p>Initializing 3D globe…</p>
+</div>
+
+<!-- HUD overlay -->
+<div id="overlay">
+
+  <div id="header">
+    <h1>✈ <span class="live">LIVE</span> FLIGHTS</h1>
+    <div class="hdr-divider"></div>
+    <div class="stat">
+      <div class="stat-val" id="hdr-count">—</div>
+      <div class="stat-lbl">Aircraft</div>
+    </div>
+    <div class="hdr-divider"></div>
+    <div class="stat">
+      <div class="stat-val" id="hdr-time">—</div>
+      <div class="stat-lbl">Updated</div>
+    </div>
+  </div>
+
+  <div id="info-panel">
+    <button id="info-close">×</button>
+    <div class="i-callsign" id="i-callsign">—</div>
+    <div class="i-country"  id="i-country">—</div>
+    <div class="i-grid">
+      <div class="i-cell"><label>Altitude</label><span id="i-alt">—</span></div>
+      <div class="i-cell"><label>Speed</label>   <span id="i-spd">—</span></div>
+      <div class="i-cell"><label>Heading</label> <span id="i-hdg">—</span></div>
+      <div class="i-cell"><label>ICAO24</label>  <span id="i-icao">—</span></div>
+    </div>
+  </div>
+
+  <div id="controls">
+    <button class="ctl" id="btn-home"  title="Reset camera">🌍</button>
+    <button class="ctl" id="btn-spin"  title="Auto-rotate">🔄</button>
+    <button class="ctl" id="btn-night" title="Toggle lights">🌓</button>
+  </div>
+
+  <div id="status-bar">
+    <div class="s-dot" id="s-dot"></div>
+    <span id="status-msg">Initializing…</span>
+  </div>
+
+</div>
+
+<script>
+// ─────────────────────────────────────────────────────────────
+// Config
+// ─────────────────────────────────────────────────────────────
+const CFG = {
+  refreshMs:   15_000,
+  maxTrail:    10,
+  maxFlights:  6_000,
+  apiUrl:      'https://opensky-network.org/api/states/all',
+  homePos:     { lon: -80, lat: 22, alt: 4_800_000, heading: 25, pitch: -11 },
+};
+
+// ─────────────────────────────────────────────────────────────
+// Aircraft icon (canvas – pointing north; Cesium rotates it)
+// ─────────────────────────────────────────────────────────────
+function makeIcon() {
+  const S = 52, cx = 26, cy = 26;
+  const c = Object.assign(document.createElement('canvas'), { width: S, height: S });
+  const g = c.getContext('2d');
+
+  // outer glow
+  const grad = g.createRadialGradient(cx, cy, 0, cx, cy, 22);
+  grad.addColorStop(0,   'rgba(255,110,0,0.55)');
+  grad.addColorStop(0.45,'rgba(255,80,0,0.2)');
+  grad.addColorStop(1,   'rgba(255,60,0,0)');
+  g.fillStyle = grad;
+  g.beginPath(); g.arc(cx, cy, 22, 0, Math.PI*2); g.fill();
+
+  g.save(); g.translate(cx, cy);
+
+  // fuselage
+  g.beginPath();
+  g.moveTo(0,-13);
+  g.bezierCurveTo(2.5,-8, 2.5,2, 1.8,12);
+  g.lineTo(0,10); g.lineTo(-1.8,12);
+  g.bezierCurveTo(-2.5,2, -2.5,-8, 0,-13);
+  g.closePath();
+  g.fillStyle = '#ff6600'; g.fill();
+
+  // wings
+  g.beginPath();
+  g.moveTo(0,-1); g.lineTo(16,7); g.lineTo(13,9);
+  g.lineTo(2,4);  g.lineTo(-2,4); g.lineTo(-13,9);
+  g.lineTo(-16,7); g.closePath();
+  g.fillStyle = '#ff8833'; g.fill();
+
+  // tail
+  g.beginPath();
+  g.moveTo(0,7);  g.lineTo(6,13); g.lineTo(4,13);
+  g.lineTo(0,10); g.lineTo(-4,13); g.lineTo(-6,13);
+  g.closePath();
+  g.fillStyle = '#ff8833'; g.fill();
+
+  g.restore();
+  return c;
+}
+
+const ICON = makeIcon();
+
+// ─────────────────────────────────────────────────────────────
+// Cesium viewer
+// ─────────────────────────────────────────────────────────────
+
+// Use ESRI imagery — no Cesium ion token required
+const viewer = new Cesium.Viewer('cesiumContainer', {
+  /* eslint-disable new-cap */
+  imageryProvider: new Cesium.ArcGisMapServerImageryProvider({
+    url: 'https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer',
+  }),
+  terrainProvider:        new Cesium.EllipsoidTerrainProvider(),
+  baseLayerPicker:        false,
+  geocoder:               false,
+  homeButton:             false,
+  sceneModePicker:        false,
+  navigationHelpButton:   false,
+  animation:              false,
+  timeline:               false,
+  fullscreenButton:       false,
+  infoBox:                false,
+  selectionIndicator:     false,
+});
+
+const scene  = viewer.scene;
+const camera = viewer.camera;
+
+// Atmosphere & lighting
+scene.skyAtmosphere.show        = true;
+scene.globe.showGroundAtmosphere = true;
+scene.globe.enableLighting       = true;
+scene.fog.enabled                = true;
+scene.fog.density                = 0.00015;
+scene.globe.atmosphereLightIntensity = 12.0;
+
+// Initial camera — low-angle cinematic look matching the screenshot
+function resetCamera(fly = false) {
+  const p = CFG.homePos;
+  const opts = {
+    destination: Cesium.Cartesian3.fromDegrees(p.lon, p.lat, p.alt),
+    orientation: {
+      heading: Cesium.Math.toRadians(p.heading),
+      pitch:   Cesium.Math.toRadians(p.pitch),
+      roll:    0,
+    },
+  };
+  fly ? camera.flyTo({ ...opts, duration: 2 }) : camera.setView(opts);
+}
+resetCamera(false);
+
+// ─────────────────────────────────────────────────────────────
+// Performance: use primitive collections instead of entities
+// ─────────────────────────────────────────────────────────────
+const billboards = scene.primitives.add(new Cesium.BillboardCollection({ scene }));
+const polylines  = scene.primitives.add(new Cesium.PolylineCollection());
+const labels     = scene.primitives.add(new Cesium.LabelCollection({ scene }));
+
+// flight registry: icao24 → { bb, line, lbl, positions, data }
+const flights = new Map();
+
+// ─────────────────────────────────────────────────────────────
+// OpenSky fetch
+// ─────────────────────────────────────────────────────────────
+async function fetchStates() {
+  try {
+    const r = await fetch(CFG.apiUrl, { signal: AbortSignal.timeout(12_000) });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const j = await r.json();
+    return j.states ?? [];
+  } catch (e) {
+    console.warn('[flights] fetch failed:', e.message);
+    return null;
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+// Update cycle
+// ─────────────────────────────────────────────────────────────
+function fmt_ft(m)  { return m != null ? `${(m * 3.28084).toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ',')} ft` : 'N/A'; }
+function fmt_kts(s) { return s != null ? `${Math.round(s * 1.94384)} kts` : 'N/A'; }
+function fmt_hdg(d) {
+  if (d == null) return 'N/A';
+  const dirs = ['N','NE','E','SE','S','SW','W','NW'];
+  return `${Math.round(d)}° ${dirs[Math.round(d/45)%8]}`;
+}
+
+async function update() {
+  setStatus('load', 'Fetching flight data…');
+
+  const states = await fetchStates();
+  if (states === null) {
+    setStatus('err', 'API unavailable — retrying in 15 s');
+    return;
+  }
+
+  const active = new Set();
+  let count = 0;
+
+  for (const s of states) {
+    if (count >= CFG.maxFlights) break;
+
+    const icao     = s[0];
+    const callsign = (s[1] ?? '').trim() || icao;
+    const country  = s[2] ?? 'Unknown';
+    const lon      = s[5];
+    const lat      = s[6];
+    const baroAlt  = s[7];
+    const onGround = s[8];
+    const speedMs  = s[9];
+    const heading  = s[10];
+    const geoAlt   = s[13];
+    const alt      = baroAlt ?? geoAlt ?? 0;
+
+    if (lon == null || lat == null || onGround) continue;
+    if (Math.abs(lon) > 180 || Math.abs(lat) > 90) continue;
+
+    active.add(icao);
+    count++;
+
+    const pos = Cesium.Cartesian3.fromDegrees(lon, lat, Math.max(alt, 200));
+    const rot  = heading != null ? -Cesium.Math.toRadians(heading) : 0;
+
+    if (flights.has(icao)) {
+      const f = flights.get(icao);
+      f.bb.position = pos;
+      f.bb.rotation = rot;
+      f.lbl.position = pos;
+
+      f.positions.push(pos);
+      if (f.positions.length > CFG.maxTrail) f.positions.shift();
+      if (f.positions.length >= 2) f.line.positions = [...f.positions];
+
+      f.data = { callsign, country, alt, speedMs, heading, icao };
+    } else {
+      const bb = billboards.add({
+        position:   pos,
+        image:      ICON,
+        width:      26, height: 26,
+        rotation:   rot,
+        alignedAxis: Cesium.Cartesian3.UNIT_Z,
+        disableDepthTestDistance: Number.POSITIVE_INFINITY,
+        scaleByDistance:       new Cesium.NearFarScalar(8e5, 1.6, 1.4e7, 0.35),
+        translucencyByDistance: new Cesium.NearFarScalar(1.6e7, 1.0, 2.4e7, 0.0),
+        id: icao,
+      });
+
+      const line = polylines.add({
+        positions: [pos],
+        width: 1.5,
+        material: Cesium.Material.fromType('PolylineGlow', {
+          glowPower: 0.14,
+          color: new Cesium.Color(1, 1, 1, 0.55),
+        }),
+        id: icao,
+      });
+
+      const lbl = labels.add({
+        position: pos,
+        text:     callsign,
+        font:     '10px monospace',
+        fillColor: Cesium.Color.WHITE,
+        outlineColor: Cesium.Color.BLACK,
+        outlineWidth: 2,
+        style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+        pixelOffset: new Cesium.Cartesian2(0, -22),
+        disableDepthTestDistance: Number.POSITIVE_INFINITY,
+        distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 1.2e6),
+        id: icao,
+      });
+
+      flights.set(icao, {
+        bb, line, lbl,
+        positions: [pos],
+        data: { callsign, country, alt, speedMs, heading, icao },
+      });
+    }
+  }
+
+  // Cull departed aircraft
+  for (const [id, f] of flights) {
+    if (!active.has(id)) {
+      billboards.remove(f.bb);
+      polylines.remove(f.line);
+      labels.remove(f.lbl);
+      flights.delete(id);
+    }
+  }
+
+  const now = new Date();
+  document.getElementById('hdr-count').textContent = flights.size.toLocaleString();
+  document.getElementById('hdr-time').textContent  = now.toLocaleTimeString([], { hour:'2-digit', minute:'2-digit', second:'2-digit' });
+  setStatus('ok', `${flights.size.toLocaleString()} aircraft tracked · refreshes every 15 s`);
+
+  // Hide loading splash on first successful load
+  document.getElementById('loading-screen').classList.add('gone');
+}
+
+// ─────────────────────────────────────────────────────────────
+// Status helpers
+// ─────────────────────────────────────────────────────────────
+function setStatus(type, msg) {
+  const dot = document.getElementById('s-dot');
+  dot.className = 's-dot' + (type !== 'ok' ? ` ${type}` : '');
+  document.getElementById('status-msg').textContent = msg;
+}
+
+// ─────────────────────────────────────────────────────────────
+// Click → info panel
+// ─────────────────────────────────────────────────────────────
+viewer.screenSpaceEventHandler.setInputAction((click) => {
+  const pick = scene.pick(click.position);
+  const icao  = pick?.id ?? pick?.primitive?.id;
+  if (icao && flights.has(icao)) {
+    const { data: d } = flights.get(icao);
+    document.getElementById('i-callsign').textContent = d.callsign || d.icao;
+    document.getElementById('i-country').textContent  = d.country  || 'Unknown';
+    document.getElementById('i-alt').textContent      = fmt_ft(d.alt);
+    document.getElementById('i-spd').textContent      = fmt_kts(d.speedMs);
+    document.getElementById('i-hdg').textContent      = fmt_hdg(d.heading);
+    document.getElementById('i-icao').textContent     = (d.icao || '').toUpperCase();
+    document.getElementById('info-panel').classList.add('open');
+  } else {
+    document.getElementById('info-panel').classList.remove('open');
+  }
+}, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+
+document.getElementById('info-close').addEventListener('click', () => {
+  document.getElementById('info-panel').classList.remove('open');
+});
+
+// ─────────────────────────────────────────────────────────────
+// Control buttons
+// ─────────────────────────────────────────────────────────────
+document.getElementById('btn-home').addEventListener('click', () => resetCamera(true));
+
+let spinHandle = null;
+document.getElementById('btn-spin').addEventListener('click', function () {
+  this.classList.toggle('active');
+  if (spinHandle) {
+    clearInterval(spinHandle);
+    spinHandle = null;
+  } else {
+    spinHandle = setInterval(() => {
+      camera.rotate(Cesium.Cartesian3.UNIT_Z, -0.0008);
+    }, 16);
+  }
+});
+
+let lightOn = true;
+document.getElementById('btn-night').addEventListener('click', function () {
+  lightOn = !lightOn;
+  scene.globe.enableLighting = lightOn;
+  this.classList.toggle('active', !lightOn);
+});
+
+// ─────────────────────────────────────────────────────────────
+// Start
+// ─────────────────────────────────────────────────────────────
+update();
+setInterval(update, CFG.refreshMs);
+</script>
+</body>
+</html>

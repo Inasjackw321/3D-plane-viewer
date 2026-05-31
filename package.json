@@ -1,0 +1,8 @@
+{
+  "name": "3d-plane-viewer",
+  "version": "1.0.0",
+  "description": "Live 3D flight tracker on an interactive globe",
+  "scripts": {
+    "start": "npx serve . -p 3000 --no-clipboard"
+  }
+}
