@@ -410,29 +410,16 @@ function initMap() {
     container: 'map',
     style: {
       version: 8,
-      glyphs: 'https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf',
       sources: {
         satellite: {
           type: 'raster',
           tiles: ['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'],
           tileSize: 256, maxzoom: 19,
         },
-        terrain: {
-          type: 'raster-dem',
-          tiles: ['https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png'],
-          encoding: 'terrarium',
-          tileSize: 256, maxzoom: 15,
-        },
       },
       layers: [
         { id: 'sat', type: 'raster', source: 'satellite' },
-        { id: 'sky', type: 'sky', paint: {
-            'sky-type': 'atmosphere',
-            'sky-atmosphere-sun': [0, 90],
-            'sky-atmosphere-sun-intensity': 12,
-        }},
       ],
-      terrain: { source: 'terrain', exaggeration: 1.5 },
     },
     center: [r0.lng, r0.lat],
     zoom:   r0.zoom,
