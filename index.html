@@ -633,7 +633,9 @@ const threeLayer = (() => {
   const Sc = new THREE.Matrix4();
   const Rx = new THREE.Matrix4(); // model Y-up → mercator Z-up
   const Ry = new THREE.Matrix4(); // heading (rotation about model up-axis)
-  const Sz = new THREE.Matrix4(); // stalk scale
+  const Off = new THREE.Matrix4(); // clip-space upward screen offset (altitude)
+  const Pst = new THREE.Matrix4(); // per-aircraft stalk projection
+  const Iden = new THREE.Matrix4(); // identity (trail pass renders raw NDC)
 
   function mkScene(model) {
     const sc = new THREE.Scene();
@@ -653,19 +655,19 @@ const threeLayer = (() => {
     return sc;
   }
 
-  // A thin 1×1×1 box spanning z=0→1 (base at origin), used as a vertical
-  // "stalk" connecting each aircraft to its ground position so altitude is
-  // unmistakable. Scaled per-aircraft: thin in x/y, tall in z.
+  // A screen-aligned vertical quad: x ∈ [-0.5, 0.5] (width), y ∈ [0, 1] (base
+  // at ground → top at aircraft). The per-aircraft Pst matrix maps it directly
+  // into clip space so the bar is always a thin, camera-facing altitude line.
   function makeStalkScene() {
-    const g = new THREE.BoxGeometry(1, 1, 1);
-    g.translate(0, 0, 0.5); // base at z=0, top at z=1
+    const g = new THREE.PlaneGeometry(1, 1);
+    g.translate(0, 0.5, 0); // base at y=0, top at y=1
     const m = new THREE.MeshBasicMaterial({
-      color: 0x44eeff, transparent: true, opacity: 0.65,
-      depthTest: false, depthWrite: false });
-    const box = new THREE.Mesh(g, m);
-    box.frustumCulled = false;
+      color: 0x44eeff, transparent: true, opacity: 0.6,
+      depthTest: false, depthWrite: false, side: THREE.DoubleSide });
+    const quad = new THREE.Mesh(g, m);
+    quad.frustumCulled = false;
     const sc = new THREE.Scene();
-    sc.add(box);
+    sc.add(quad);
     return sc;
   }
 
@@ -783,30 +785,37 @@ const threeLayer = (() => {
       const dpr = window.devicePixelRatio || 1;
       const pxPerMercator = 512 * Math.pow(2, map.getZoom()) * dpr;
 
-      // Project a mercator point (x,y,z) → normalised device coords using the
-      // mainMatrix directly. Measuring the on-screen size of a tiny probe vector
-      // AT the point's true 3D position captures perspective foreshortening —
-      // including altitude — so a model never changes size as the camera moves
-      // or zooms. (map.project only sees the ground plane, which is why planes
-      // floating at altitude still appeared to grow before.)
       const Me = M4.elements;
       const canvas = map.getCanvas();
       const halfW = canvas.width / 2, halfH = canvas.height / 2;
-      function ndc(x, y, z) {
-        const cw = Me[3]*x + Me[7]*y + Me[11]*z + Me[15];
-        return [(Me[0]*x + Me[4]*y + Me[8]*z + Me[12]) / cw,
-                (Me[1]*x + Me[5]*y + Me[9]*z + Me[13]) / cw, cw];
+
+      // Clip-space position of a GROUND mercator point (z = 0). Returns the
+      // homogeneous [x, y, z, w] before the perspective divide.
+      function groundClip(x, y) {
+        return [
+          Me[0]*x + Me[4]*y + Me[12],
+          Me[1]*x + Me[5]*y + Me[13],
+          Me[2]*x + Me[6]*y + Me[14],
+          Me[3]*x + Me[7]*y + Me[15],
+        ];
       }
-      const PROBE = 0.000004; // ~160 m mercator probe for the local pixel scale
-      function ppm(x, y, z) { // device pixels per mercator unit at (x,y,z)
-        const a = ndc(x, y, z), b = ndc(x + PROBE, y, z);
-        if (a[2] <= 0 || b[2] <= 0) return pxPerMercator; // behind camera
-        const d = Math.hypot((b[0]-a[0])*halfW, (b[1]-a[1])*halfH) / PROBE;
+      // Device pixels per mercator unit at a GROUND point — measured from a tiny
+      // horizontal probe. Models are anchored to the ground (z = 0) and sized
+      // from this, so their on-screen size depends ONLY on zoom, never on
+      // altitude or camera distance → it stays perfectly consistent. The old
+      // code floated models at a screen-pixel altitude, which at low zoom became
+      // a huge mercator height that threw them toward the camera and ballooned.
+      const PROBE = 0.000004;
+      function ppmGround(x, y) {
+        const a = groundClip(x, y), b = groundClip(x + PROBE, y);
+        if (a[3] <= 0 || b[3] <= 0) return pxPerMercator;
+        const d = Math.hypot((b[0]/b[3]-a[0]/a[3])*halfW,
+                             (b[1]/b[3]-a[1]/a[3])*halfH) / PROBE;
         return d > 1e-6 ? d : pxPerMercator;
       }
-      function altInfo(altFt, ppmGround) {
-        const altPx = Math.min(Math.max((altFt / 1000) * ALT_PX_PER_1000FT, ALT_PX_MIN), ALT_PX_MAX);
-        return { altPx, altMerc: (altPx * dpr) / ppmGround };
+      // Altitude as a constant SCREEN-pixel height (independent of zoom).
+      function altPxOf(altFt) {
+        return Math.min(Math.max((altFt / 1000) * ALT_PX_PER_1000FT, ALT_PX_MIN), ALT_PX_MAX);
       }
 
       // resetState + clearDepth: re-sync Three.js with MapLibre's GL state and
@@ -814,13 +823,15 @@ const threeLayer = (() => {
       threeRenderer.resetState();
       threeRenderer.clearDepth();
 
-      // ── Trails (float at each sample's real altitude → tracks in the air) ──
+      // ── Trails (each sample lifted to its altitude purely in screen space) ──
+      // Vertices are written already in NDC and drawn with an identity matrix,
+      // so the per-point altitude is a constant pixel offset that never warps.
       if (SHOW_TRAILS) {
         const trailMat = new THREE.LineBasicMaterial({
           vertexColors: true, transparent: true, opacity: 0.9,
           depthTest: false, depthWrite: false,
         });
-        cam.projectionMatrix.copy(M4);
+        cam.projectionMatrix.copy(Iden);
         for (const [hex, d] of flightMap) {
           if (d.onGround) continue;
           const trail = trailHistory.get(hex);
@@ -832,10 +843,11 @@ const threeLayer = (() => {
           for (let i = 0; i < n; i++) {
             const t = i / (n - 1); // 0=oldest→dim, 1=newest→bright
             const p = trail[i];
-            const { altMerc } = altInfo(p.alt || 0, ppm(p.x, p.y, 0));
-            pos[i*3]   = p.x;
-            pos[i*3+1] = p.y;
-            pos[i*3+2] = altMerc; // lift each point to its altitude
+            const c = groundClip(p.x, p.y);
+            const w = c[3] || 1e-6;
+            pos[i*3]   = c[0] / w;
+            pos[i*3+1] = c[1] / w + (altPxOf(p.alt || 0) * dpr) / halfH; // lift in NDC
+            pos[i*3+2] = Math.max(-0.999, Math.min(0.999, c[2] / w));
             col[i*3]   = rgb[0] * t;
             col[i*3+1] = rgb[1] * t;
             col[i*3+2] = rgb[2] * t;
@@ -859,34 +871,38 @@ const threeLayer = (() => {
         if (!sc) continue;
 
         const ground = maplibregl.MercatorCoordinate.fromLngLat([d.lon, d.lat], 0);
-        const ppmG   = ppm(ground.x, ground.y, 0);
-        const { altPx, altMerc } = altInfo(d.altFt ?? 0, ppmG);
-        // Model scale measured at the aircraft's ACTUAL altitude position, so
-        // perspective is fully cancelled and the size never drifts.
-        const ppmA = ppm(ground.x, ground.y, altMerc);
-        const s = (MODEL_PX * dpr) / ppmA;
+        const gx = ground.x, gy = ground.y;
+        const s  = (MODEL_PX * dpr) / ppmGround(gx, gy); // size depends on zoom only
+        const altPx = altPxOf(d.altFt ?? 0);
+        const k = (altPx * dpr) / halfH; // upward NDC offset = altitude in screen px
 
-        // Altitude stalk: a vertical bar from the surface up to the aircraft.
+        // Altitude stalk — a thin screen-aligned bar from the ground point up to
+        // the model. Pst maps the unit quad (x∈[-0.5,0.5], y∈[0,1]) straight to
+        // clip space: y=0 → ground, y=1 → ground lifted by k (in NDC).
         if (SHOW_STALKS && altPx > ALT_PX_MIN + 1) {
-          const wMerc = (1.6 * dpr) / ppmG; // ~1.6px-wide bar
-          Lt.makeTranslation(ground.x, ground.y, 0);
-          Sz.makeScale(wMerc, wMerc, altMerc); // thin box stretched to altitude
-          cam.projectionMatrix.copy(M4).multiply(Lt).multiply(Sz);
-          threeRenderer.render(stalkScene, cam);
+          const gc = groundClip(gx, gy);
+          if (gc[3] > 0) {
+            const wNdc = (2.0 * dpr) / halfW; // ~2px wide
+            Pst.set(
+              wNdc*gc[3], 0,         0, gc[0],
+              0,          k*gc[3],   0, gc[1],
+              0,          0,         0, gc[2],
+              0,          0,         0, gc[3]);
+            cam.projectionMatrix.copy(Pst);
+            threeRenderer.render(stalkScene, cam);
+          }
         }
 
-        // Heading: models are built nose→+X, up→+Y. Ry(π/2 − track) points the
-        // nose along the compass heading; Rx(π/2) lays the model flat so its
-        // up-axis aligns with mercator Z (altitude).
+        // Model: anchored at the ground (z = 0) so its size is stable, then the
+        // whole thing is shoved UP the screen by k via the clip-space Off matrix
+        // — a constant pixel altitude that never balloons at any zoom.
         const h = Math.PI / 2 - THREE.MathUtils.degToRad(d.track || 0);
-
-        Lt.makeTranslation(ground.x, ground.y, altMerc);
+        Off.makeTranslation(0, k, 0); // left-multiply ⇒ ndc.y += k
+        Lt.makeTranslation(gx, gy, 0);
         Sc.makeScale(s, -s, s); // −s on Y: mercator Y is south-positive (inverted)
         Rx.makeRotationX(Math.PI / 2);
         Ry.makeRotationY(h);
-
-        // camera = mainMatrix × T × S × Rx × Ry  (model sits at scene origin)
-        cam.projectionMatrix.copy(M4).multiply(Lt).multiply(Sc).multiply(Rx).multiply(Ry);
+        cam.projectionMatrix.copy(Off).multiply(M4).multiply(Lt).multiply(Sc).multiply(Rx).multiply(Ry);
         threeRenderer.render(sc, cam);
       }
 
