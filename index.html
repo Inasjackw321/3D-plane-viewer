@@ -29,6 +29,9 @@
       white-space: nowrap; pointer-events: none;
     }
     .lbl.mil { border-color: rgba(60,220,100,.65); color: #55ee88; }
+    .lbl b { font-weight: 700; }
+    .lbl .lbl-sub { display: block; font-size: 8px; font-weight: 600;
+      opacity: .72; letter-spacing: .3px; margin-top: 1px; }
 
     #header {
       position: fixed; top: 14px; left: 50%; transform: translateX(-50%);
@@ -103,6 +106,8 @@
       display: flex; align-items: center; justify-content: center;
       backdrop-filter: blur(10px); transition: all .15s; }
     .ctl:hover { background: rgba(255,85,0,.22); border-color: #ff5500; color: #fff; }
+    .ctl-sep { height: 6px; }
+    .ctl.tgl.active { background: rgba(60,200,120,.30); border-color: #3cdc78; color: #aaffcc; }
 
     #status-bar {
       position: fixed; bottom: 12px; left: 50%; transform: translateX(-50%);
@@ -176,6 +181,11 @@
   <button class="ctl" id="btn-tdn"  title="Tilt down">▼</button>
   <button class="ctl" id="btn-zin"  title="Zoom in">+</button>
   <button class="ctl" id="btn-zout" title="Zoom out">−</button>
+  <div class="ctl-sep"></div>
+  <button class="ctl tgl" id="btn-labels" title="Toggle tags (L)">🏷</button>
+  <button class="ctl tgl" id="btn-trails" title="Toggle trails (T)">〜</button>
+  <button class="ctl tgl" id="btn-stalks" title="Toggle altitude lines (S)">┃</button>
+  <button class="ctl tgl" id="btn-detail" title="Toggle tag detail (D)">ℹ</button>
 </div>
 
 <div id="status-bar">
@@ -237,8 +247,9 @@ const MODEL_PX = 7; // screen-px per geometry unit (~90px aircraft)
 const ALT_PX_PER_1000FT = 6;
 const ALT_PX_MIN = 14;   // ground-skimming aircraft still clear the surface
 const ALT_PX_MAX = 420;  // safety cap so extreme altitudes stay on-screen
-const ALT_STALK = true;  // draw a vertical line from the surface to each aircraft
-const TRAIL_MAX = 30;   // max position samples to store per aircraft
+// Altitude lines, trails and tags are toggled live via SHOW_STALKS/SHOW_TRAILS/
+// SHOW_LABELS (see view-toggles state below).
+const TRAIL_MAX = 40;   // max position samples to store per aircraft
 
 const REGION_VIEWS = {
   middle_east:   { center: [45,  27], zoom: 5.5, pitch: 72 },
@@ -251,8 +262,19 @@ const REGION_VIEWS = {
 // ── state ─────────────────────────────────────────────────────
 let currentRegion = 'middle_east';
 let flightMap     = new Map(); // hex → {lat,lon,displayAltM,track,kind,...}
-const trailHistory = new Map(); // hex → [{x,y}] mercator coords (oldest first)
+const trailHistory = new Map(); // hex → [{x,y,alt}] mercator coords + altitude
 let threeRenderer, map;
+
+// ── view toggles (persisted in localStorage) ──────────────────
+const prefs = JSON.parse(localStorage.getItem('flt-prefs') || '{}');
+let SHOW_LABELS = prefs.labels !== false;
+let SHOW_TRAILS = prefs.trails !== false;
+let SHOW_STALKS = prefs.stalks !== false;
+let LABEL_DETAIL = prefs.detail !== false; // show altitude/speed under callsign
+function savePrefs() {
+  localStorage.setItem('flt-prefs', JSON.stringify({
+    labels: SHOW_LABELS, trails: SHOW_TRAILS, stalks: SHOW_STALKS, detail: LABEL_DETAIL }));
+}
 
 // ── MapLibre ──────────────────────────────────────────────────
 map = new maplibregl.Map({
@@ -758,24 +780,33 @@ const threeLayer = (() => {
       // coordinates → clip space, matching MercatorCoordinate.fromLngLat.
       M4.fromArray(options.defaultProjectionData.mainMatrix);
 
-      // Baseline mercator→pixel scale (orthographic). Used for trail z-lift and
-      // stalk width where perspective error is irrelevant.
       const dpr = window.devicePixelRatio || 1;
       const pxPerMercator = 512 * Math.pow(2, map.getZoom()) * dpr;
 
-      // True screen-constant scale: measure how many CSS pixels one mercator unit
-      // actually spans on screen AT the aircraft's location, using map.project.
-      // Unlike 512·2^zoom this captures perspective foreshortening, so a model
-      // floating at altitude under a tilted camera keeps a fixed pixel size no
-      // matter how far you zoom in — the previous formula only cancelled the
-      // orthographic part, which is why planes still appeared to grow.
-      const MERC_STEP = 0.00002; // small mercator-x probe (~world-relative)
-      function screenScale(lon, lat) {
-        const a = map.project([lon, lat]);
-        const lon2 = lon + MERC_STEP * 360; // +MERC_STEP in mercator-x
-        const b = map.project([lon2, lat]);
-        const cssPerMerc = Math.hypot(b.x - a.x, b.y - a.y) / MERC_STEP;
-        return cssPerMerc > 1e-6 ? cssPerMerc : pxPerMercator / dpr;
+      // Project a mercator point (x,y,z) → normalised device coords using the
+      // mainMatrix directly. Measuring the on-screen size of a tiny probe vector
+      // AT the point's true 3D position captures perspective foreshortening —
+      // including altitude — so a model never changes size as the camera moves
+      // or zooms. (map.project only sees the ground plane, which is why planes
+      // floating at altitude still appeared to grow before.)
+      const Me = M4.elements;
+      const canvas = map.getCanvas();
+      const halfW = canvas.width / 2, halfH = canvas.height / 2;
+      function ndc(x, y, z) {
+        const cw = Me[3]*x + Me[7]*y + Me[11]*z + Me[15];
+        return [(Me[0]*x + Me[4]*y + Me[8]*z + Me[12]) / cw,
+                (Me[1]*x + Me[5]*y + Me[9]*z + Me[13]) / cw, cw];
+      }
+      const PROBE = 0.000004; // ~160 m mercator probe for the local pixel scale
+      function ppm(x, y, z) { // device pixels per mercator unit at (x,y,z)
+        const a = ndc(x, y, z), b = ndc(x + PROBE, y, z);
+        if (a[2] <= 0 || b[2] <= 0) return pxPerMercator; // behind camera
+        const d = Math.hypot((b[0]-a[0])*halfW, (b[1]-a[1])*halfH) / PROBE;
+        return d > 1e-6 ? d : pxPerMercator;
+      }
+      function altInfo(altFt, ppmGround) {
+        const altPx = Math.min(Math.max((altFt / 1000) * ALT_PX_PER_1000FT, ALT_PX_MIN), ALT_PX_MAX);
+        return { altPx, altMerc: (altPx * dpr) / ppmGround };
       }
 
       // resetState + clearDepth: re-sync Three.js with MapLibre's GL state and
@@ -783,65 +814,61 @@ const threeLayer = (() => {
       threeRenderer.resetState();
       threeRenderer.clearDepth();
 
-      // ── Trail rendering ───────────────────────────────────────
-      // Trails are lines in raw mercator [0,1] space — set projection = M4
-      // directly so vertices are used as-is without any additional transform.
-      const trailMat = new THREE.LineBasicMaterial({
-        vertexColors: true, transparent: true, opacity: 0.9,
-        depthTest: false, depthWrite: false,
-      });
-      cam.projectionMatrix.copy(M4);
-      for (const [hex, d] of flightMap) {
-        if (d.onGround) continue;
-        const trail = trailHistory.get(hex);
-        if (!trail || trail.length < 2) continue;
-        const n = trail.length;
-        const pos = new Float32Array(n * 3);
-        const col = new Float32Array(n * 3);
-        const zLift = 3 / pxPerMercator; // 3px above terrain so trail doesn't z-fight
-        const rgb = KIND_TRAIL[d.kind] || [0.5, 0.8, 1.0];
-        for (let i = 0; i < n; i++) {
-          const t = i / (n - 1); // 0=oldest→dim, 1=newest→bright
-          pos[i*3]   = trail[i].x;
-          pos[i*3+1] = trail[i].y;
-          pos[i*3+2] = zLift;
-          col[i*3]   = rgb[0] * t;
-          col[i*3+1] = rgb[1] * t;
-          col[i*3+2] = rgb[2] * t;
+      // ── Trails (float at each sample's real altitude → tracks in the air) ──
+      if (SHOW_TRAILS) {
+        const trailMat = new THREE.LineBasicMaterial({
+          vertexColors: true, transparent: true, opacity: 0.9,
+          depthTest: false, depthWrite: false,
+        });
+        cam.projectionMatrix.copy(M4);
+        for (const [hex, d] of flightMap) {
+          if (d.onGround) continue;
+          const trail = trailHistory.get(hex);
+          if (!trail || trail.length < 2) continue;
+          const n = trail.length;
+          const pos = new Float32Array(n * 3);
+          const col = new Float32Array(n * 3);
+          const rgb = KIND_TRAIL[d.kind] || [0.5, 0.8, 1.0];
+          for (let i = 0; i < n; i++) {
+            const t = i / (n - 1); // 0=oldest→dim, 1=newest→bright
+            const p = trail[i];
+            const { altMerc } = altInfo(p.alt || 0, ppm(p.x, p.y, 0));
+            pos[i*3]   = p.x;
+            pos[i*3+1] = p.y;
+            pos[i*3+2] = altMerc; // lift each point to its altitude
+            col[i*3]   = rgb[0] * t;
+            col[i*3+1] = rgb[1] * t;
+            col[i*3+2] = rgb[2] * t;
+          }
+          const geo = new THREE.BufferGeometry();
+          geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+          geo.setAttribute('color',    new THREE.Float32BufferAttribute(col, 3));
+          const line = new THREE.Line(geo, trailMat);
+          line.frustumCulled = false;
+          const trailSc = new THREE.Scene();
+          trailSc.add(line);
+          threeRenderer.render(trailSc, cam);
+          geo.dispose();
         }
-        const geo = new THREE.BufferGeometry();
-        geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-        geo.setAttribute('color',    new THREE.Float32BufferAttribute(col, 3));
-        const line = new THREE.Line(geo, trailMat);
-        line.frustumCulled = false;
-        const trailSc = new THREE.Scene();
-        trailSc.add(line);
-        threeRenderer.render(trailSc, cam);
-        geo.dispose();
+        trailMat.dispose();
       }
-      trailMat.dispose();
 
       for (const [, d] of flightMap) {
         if (d.onGround) continue;
         const sc = sceneFor(d);
         if (!sc) continue;
 
-        // Perspective-aware scale at THIS aircraft's screen location: model and
-        // altitude are both expressed in real on-screen pixels, so zooming in
-        // never changes their size or height.
-        const cssPerMerc = screenScale(d.lon, d.lat);
-        const s = MODEL_PX / cssPerMerc; // mercator units per geometry unit
-
-        // Height from real altitude data: lift the model in screen-pixels
-        // proportional to its reported altitude (consistent across zooms).
-        const ground  = maplibregl.MercatorCoordinate.fromLngLat([d.lon, d.lat], 0);
-        const altFt   = d.altFt != null ? d.altFt : 0;
-        const altPx   = Math.min(Math.max((altFt / 1000) * ALT_PX_PER_1000FT, ALT_PX_MIN), ALT_PX_MAX);
-        const altMerc = altPx / cssPerMerc; // height in mercator units (screen-constant)
+        const ground = maplibregl.MercatorCoordinate.fromLngLat([d.lon, d.lat], 0);
+        const ppmG   = ppm(ground.x, ground.y, 0);
+        const { altPx, altMerc } = altInfo(d.altFt ?? 0, ppmG);
+        // Model scale measured at the aircraft's ACTUAL altitude position, so
+        // perspective is fully cancelled and the size never drifts.
+        const ppmA = ppm(ground.x, ground.y, altMerc);
+        const s = (MODEL_PX * dpr) / ppmA;
 
         // Altitude stalk: a vertical bar from the surface up to the aircraft.
-        if (ALT_STALK && altPx > ALT_PX_MIN + 1) {
-          const wMerc = 1.6 / cssPerMerc; // ~1.6px-wide bar
+        if (SHOW_STALKS && altPx > ALT_PX_MIN + 1) {
+          const wMerc = (1.6 * dpr) / ppmG; // ~1.6px-wide bar
           Lt.makeTranslation(ground.x, ground.y, 0);
           Sz.makeScale(wMerc, wMerc, altMerc); // thin box stretched to altitude
           cam.projectionMatrix.copy(M4).multiply(Lt).multiply(Sz);
@@ -850,8 +877,7 @@ const threeLayer = (() => {
 
         // Heading: models are built nose→+X, up→+Y. Ry(π/2 − track) points the
         // nose along the compass heading; Rx(π/2) lays the model flat so its
-        // up-axis aligns with mercator Z (altitude). Without Rx the aircraft
-        // would stand on its wingtip and appear as an invisible sliver.
+        // up-axis aligns with mercator Z (altitude).
         const h = Math.PI / 2 - THREE.MathUtils.degToRad(d.track || 0);
 
         Lt.makeTranslation(ground.x, ground.y, altMerc);
@@ -899,7 +925,7 @@ const labelsEl = document.getElementById('labels');
 const labelEls = new Map();
 
 function refreshLabels() {
-  if (map.getZoom() < 3.5) { labelsEl.style.display = 'none'; return; }
+  if (!SHOW_LABELS || map.getZoom() < 3.5) { labelsEl.style.display = 'none'; return; }
   labelsEl.style.display = '';
   const W = window.innerWidth, H = window.innerHeight;
   const vis = new Set();
@@ -916,7 +942,15 @@ function refreshLabels() {
       labelsEl.appendChild(el);
       labelEls.set(hex, el);
     }
-    el.textContent = d.callsign || hex.toUpperCase();
+    const cs = d.callsign || hex.toUpperCase();
+    if (LABEL_DETAIL) {
+      // Callsign + a compact altitude · speed line (FLxxx, kts).
+      const fl  = d.altFt != null ? 'FL' + String(Math.round(d.altFt / 100)).padStart(3, '0') : '—';
+      const spd = d.gs != null ? Math.round(d.gs) + 'kt' : '';
+      el.innerHTML = `<b>${cs}</b><span class="lbl-sub">${fl}${spd ? ' · ' + spd : ''}</span>`;
+    } else {
+      el.textContent = cs;
+    }
     el.style.left  = px.x + 'px';
     el.style.top   = px.y + 'px';
     el.style.display = '';
@@ -1017,7 +1051,7 @@ async function fetchAndUpdate() {
       const last = trail[trail.length - 1];
       // Only append if the aircraft has moved a meaningful distance
       if (!last || Math.hypot(mc.x - last.x, mc.y - last.y) > 4e-6) {
-        trail.push({ x: mc.x, y: mc.y });
+        trail.push({ x: mc.x, y: mc.y, alt: d.altFt ?? 0 });
         if (trail.length > TRAIL_MAX) trail.shift();
       }
       trailHistory.set(hex, trail);
@@ -1059,6 +1093,38 @@ document.getElementById('btn-zin').addEventListener('click',  () => map.easeTo({
 document.getElementById('btn-zout').addEventListener('click', () => map.easeTo({ zoom: map.getZoom()-0.8, duration: 300 }));
 document.getElementById('info-close').addEventListener('click', () =>
   document.getElementById('info-panel').classList.remove('open'));
+
+// ── view toggles ───────────────────────────────────────────────
+function syncToggleUI() {
+  document.getElementById('btn-labels').classList.toggle('active', SHOW_LABELS);
+  document.getElementById('btn-trails').classList.toggle('active', SHOW_TRAILS);
+  document.getElementById('btn-stalks').classList.toggle('active', SHOW_STALKS);
+  document.getElementById('btn-detail').classList.toggle('active', LABEL_DETAIL);
+}
+function toggleLabels() { SHOW_LABELS = !SHOW_LABELS; afterToggle(); }
+function toggleTrails() { SHOW_TRAILS = !SHOW_TRAILS; afterToggle(); }
+function toggleStalks() { SHOW_STALKS = !SHOW_STALKS; afterToggle(); }
+function toggleDetail() { LABEL_DETAIL = !LABEL_DETAIL; afterToggle(); }
+function afterToggle() { savePrefs(); syncToggleUI(); refreshLabels(); map.triggerRepaint(); }
+document.getElementById('btn-labels').addEventListener('click', toggleLabels);
+document.getElementById('btn-trails').addEventListener('click', toggleTrails);
+document.getElementById('btn-stalks').addEventListener('click', toggleStalks);
+document.getElementById('btn-detail').addEventListener('click', toggleDetail);
+syncToggleUI();
+
+// ── keyboard shortcuts ─────────────────────────────────────────
+window.addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT' || e.metaKey || e.ctrlKey) return;
+  switch (e.key.toLowerCase()) {
+    case 'l': toggleLabels(); break;
+    case 't': toggleTrails(); break;
+    case 's': toggleStalks(); break;
+    case 'd': toggleDetail(); break;
+    case 'escape': document.getElementById('info-panel').classList.remove('open'); break;
+    case '+': case '=': map.easeTo({ zoom: map.getZoom()+0.8, duration: 300 }); break;
+    case '-': map.easeTo({ zoom: map.getZoom()-0.8, duration: 300 }); break;
+  }
+});
 </script>
 </body>
 </html>
