@@ -197,9 +197,9 @@ const REFRESH_MS = 15000;
 //   rotDeg: [x,y,z] extra rotation (degrees) if a model faces the wrong way.
 //   The loader auto-aligns the longest axis to +X (nose) and normalises size.
 const MODEL_FILES = {
-  cargo: { url: 'models/c17.glb',   rotDeg: [0, 0, 0] }, // C-17 Globemaster III
-  tanker:{ url: 'models/kc46.glb',  rotDeg: [0, 0, 0] }, // KC-46A Pegasus
-  awacs: { url: 'models/e3.glb',    rotDeg: [0, 0, 0] }, // E-3 Sentry AWACS
+  cargo: { url: 'modelsc17.glb',  rotDeg: [0, 0, 0] }, // C-17 Globemaster III
+  tanker:{ url: 'modelskc46.glb', rotDeg: [0, 0, 0] }, // KC-46A Pegasus
+  awacs: { url: 'modelse3.glb',   rotDeg: [0, 0, 0] }, // E-3 Sentry AWACS
 };
 // Target length (in geometry units) every loaded model is scaled to, so all
 // aircraft render at a consistent on-screen size via MODEL_PX.
