@@ -182,7 +182,7 @@ const REFRESH_MS = 15000;
 // MODEL_PX: target screen-pixels per geometry unit.
 // Using a screen-space constant keeps models visible at every zoom level
 // (fixed-physical-size blows up to thousands of px when zoomed in).
-const MODEL_PX    = 18;
+const MODEL_PX    = 2.2;
 // Altitude clamped to [MIN_ALT_PX … MAX_ALT_PX] screen-pixel equivalents
 // so aircraft are always on-screen regardless of zoom or reported altitude.
 const MIN_ALT_PX  = 25;
@@ -497,7 +497,10 @@ const threeLayer = (() => {
 
       // Screen-space scale: MODEL_PX pixels per geometry unit at every zoom.
       // 512 * 2^zoom = mercator pixels per world unit (standard MapLibre tile math).
-      const pxPerMercator = 512 * Math.pow(2, map.getZoom());
+      // Account for devicePixelRatio: the WebGL canvas renders at native
+      // resolution, so on a 2× display 1 CSS px = 2 device px.
+      const dpr = window.devicePixelRatio || 1;
+      const pxPerMercator = 512 * Math.pow(2, map.getZoom()) * dpr;
       const s = MODEL_PX / pxPerMercator;
 
       // resetState once: re-sync Three.js with the GL state MapLibre left behind.
