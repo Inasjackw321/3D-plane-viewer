@@ -3,10 +3,17 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Live 3D Flight Tracker</title>
-  <link href="https://unpkg.com/maplibre-gl/dist/maplibre-gl.css" rel="stylesheet">
-  <script src="https://unpkg.com/maplibre-gl/dist/maplibre-gl.js"></script>
-  <script src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>
+  <title>Military 3D Flight Tracker</title>
+  <link href="https://unpkg.com/maplibre-gl@5/dist/maplibre-gl.css" rel="stylesheet">
+  <script src="https://unpkg.com/maplibre-gl@5/dist/maplibre-gl.js"></script>
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+    }
+  }
+  </script>
   <style>
     *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
     html, body { width: 100%; height: 100%; overflow: hidden; background: #0a0e1a;
@@ -128,11 +135,9 @@
 <div id="splash"><div class="spin"></div><p>Loading satellite map…</p></div>
 
 <div id="header">
-  <h1>✈ <span class="live">LIVE</span> FLIGHTS</h1>
+  <h1>⚔ <span class="live">MILITARY</span> FLIGHTS</h1>
   <div class="hdiv"></div>
-  <div class="stat"><div class="stat-v" id="hdr-count">—</div><div class="stat-l">Civil</div></div>
-  <div class="hdiv"></div>
-  <div class="stat"><div class="stat-v mv" id="hdr-mil">—</div><div class="stat-l">Military</div></div>
+  <div class="stat"><div class="stat-v mv" id="hdr-mil">—</div><div class="stat-l">Aircraft</div></div>
   <div class="hdiv"></div>
   <div class="stat"><div class="stat-v" id="hdr-time">—</div><div class="stat-l">Updated</div></div>
 </div>
@@ -142,8 +147,8 @@
   <div class="lr"><div class="ld" style="background:#55aaff"></div><div class="ll">Tanker</div></div>
   <div class="lr"><div class="ld" style="background:#ffff44"></div><div class="ll">AWACS</div></div>
   <div class="lr"><div class="ld" style="background:#aa88ff"></div><div class="ll">Cargo</div></div>
-  <div class="lr"><div class="ld" style="background:#44ffcc"></div><div class="ll">Mil. Heli</div></div>
-  <div class="lr"><div class="ld" style="background:#ff8800"></div><div class="ll">Civil</div></div>
+  <div class="lr"><div class="ld" style="background:#44ffcc"></div><div class="ll">Atk Heli</div></div>
+  <div class="lr"><div class="ld" style="background:#44ffaa"></div><div class="ll">Transport Heli</div></div>
 </div>
 
 <div id="regions">
@@ -178,14 +183,61 @@
   <span id="status-msg">Initialising…</span>
 </div>
 
-<script>
+<script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
+import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
+
 // ── config ────────────────────────────────────────────────────
 const REFRESH_MS = 15000;
-// MODEL_M: how many display-metres equal 1 geometry unit.
-// At zoom 5.5 / lat 27°, 1 unit ≈ 6.5 px.
-// Fuselage ~13 units → ~85 px, AWACS disc ~13 units diam → very visible.
-const MODEL_M  = 10000;
-const ALT_EXAG = 6;
+
+// Real aircraft models: Flightradar24 open models (GPL-2) converted from
+// glTF 1.0 → 2.0 (Three.js only loads 2.0) and committed to assets/, so they
+// load locally with no setup. Keyed by each aircraft's real ICAO type code.
+const MODEL_BASE = 'assets/';
+// glTF-2.0 models committed in assets/ (real, textured airliner airframes).
+const MODEL_HAVE = new Set([
+  'a320','a321','a332','a333','b738','b744','b762','b763','b772','heli',
+]);
+// Military ICAO type → closest available airframe. Many military jets ARE
+// airliner derivatives: KC-46 = 767, A330 MRTT = A330, E-7/P-8 = 737,
+// KC-135/E-3 = 4-engine (stand-in 747), KC-10 = widebody.
+const MIL_TYPE_MODEL = {
+  KC46:'b762', K46:'b762', A310:'b762',
+  K35R:'b763', K35E:'b763', KC135:'b763', VC10:'b763', C135:'b763', C137:'b763', C32:'b762',
+  KC10:'b772', DC10:'b772', MD11:'b772',
+  E3TF:'b744', E3CF:'b744', E3D:'b744', E3:'b744', E3S:'b744', E767:'b744', E4:'b744',
+  P3:'b744', P3C:'b744', RC135:'b744', WC135:'b744', TC135:'b744', OC135:'b744',
+  E7:'b738', E7W:'b738', P8:'b738', B38M:'b738', C40:'b738',
+  A332:'a332', A333:'a333',
+  // fighters, C-17/C-130/A400 transports and helicopters keep their purpose-built
+  // procedural shapes (no airliner looks right), so they are intentionally absent.
+};
+// Resolve an aircraft to a committed model basename, or null to keep the
+// procedural shape. Tries the military map first, then the raw ICAO code.
+function modelForType(typeCode) {
+  const t = (typeCode || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  if (!t) return null;
+  if (MIL_TYPE_MODEL[t] && MODEL_HAVE.has(MIL_TYPE_MODEL[t])) return MIL_TYPE_MODEL[t];
+  const lc = t.toLowerCase();
+  if (MODEL_HAVE.has(lc)) return lc;
+  return null;
+}
+// Target length (in geometry units) every loaded model is scaled to, so all
+// aircraft render at a consistent on-screen size via MODEL_PX.
+const MODEL_TARGET_UNITS = 14;
+// Model size is screen-constant: aircraft stay the same readable size at every
+// zoom level (zooming the map does NOT balloon them), and their height is
+// computed separately so zoom never moves them up or down.
+const MODEL_PX = 7; // screen-px per geometry unit (~90px aircraft)
+// Altitude → on-screen height. Models are lifted in proportion to their
+// real reported altitude so higher aircraft sit visibly higher.
+// ALT_PX_PER_1000FT screen-px per 1000 ft (e.g. FL350 → 35×4 = 140 px up).
+const ALT_PX_PER_1000FT = 6;
+const ALT_PX_MIN = 14;   // ground-skimming aircraft still clear the surface
+const ALT_PX_MAX = 420;  // safety cap so extreme altitudes stay on-screen
+const ALT_STALK = true;  // draw a vertical line from the surface to each aircraft
 
 const REGION_VIEWS = {
   middle_east:   { center: [45,  27], zoom: 5.5, pitch: 72 },
@@ -217,7 +269,8 @@ map = new maplibregl.Map({
   center: REGION_VIEWS.middle_east.center,
   zoom:   REGION_VIEWS.middle_east.zoom,
   pitch:  REGION_VIEWS.middle_east.pitch,
-  antialias: true, maxPitch: 85,
+  maxPitch: 85,
+  canvasContextAttributes: {antialias: true},
 });
 map.on('load', () => {
   document.getElementById('splash').classList.add('gone');
@@ -226,21 +279,24 @@ map.on('load', () => {
 });
 
 // ── materials ─────────────────────────────────────────────────
-function mat(color, emissive, ei = 0.55) {
-  return new THREE.MeshLambertMaterial({ color, emissive, emissiveIntensity: ei,
-    depthTest: false, depthWrite: false });
+// PBR materials with depth test on so models self-occlude correctly.
+// Emissive lift ensures the colour reads clearly against the dark map.
+function mat(color, emissive, ei = 0.35) {
+  return new THREE.MeshStandardMaterial({
+    color, emissive, emissiveIntensity: ei,
+    metalness: 0.3, roughness: 0.45 });
 }
 const M = {
-  fighter:  mat(0x22ff66, 0x00aa33, 0.65),
-  tanker:   mat(0x55aaff, 0x1166bb, 0.55),
-  awacs:    mat(0xffee44, 0xcc8800, 0.55),
-  awacsDsk: mat(0xffff00, 0xffaa00, 0.90),
-  cargo:    mat(0xaa88ff, 0x5533aa, 0.50),
-  atkHeli:  mat(0x44ffcc, 0x009966, 0.65),
-  trnHeli:  mat(0x44ffaa, 0x008844, 0.60),
-  civJet:   mat(0xff8800, 0xff4400, 0.45),
-  civProp:  mat(0xffaa00, 0xff6600, 0.40),
-  civHeli:  mat(0xff6600, 0xff2200, 0.50),
+  fighter:  mat(0x44ff88, 0x0d4020),
+  tanker:   mat(0x55bbff, 0x0d2a55),
+  awacs:    mat(0xffdd44, 0x55380a),
+  awacsDsk: mat(0xffee44, 0x6a4800, 0.7),
+  cargo:    mat(0xbb99ff, 0x2a1f55),
+  atkHeli:  mat(0x44ffcc, 0x0a3d2e),
+  trnHeli:  mat(0x44ffaa, 0x0a3a1f),
+  civJet:   mat(0xff9955, 0x4a2606),
+  civProp:  mat(0xffbb44, 0x4a2e06),
+  civHeli:  mat(0xff8844, 0x4a1f06),
 };
 
 // ── geometry helpers ──────────────────────────────────────────
@@ -445,22 +501,127 @@ function buildCivHeli() {
 // KEY PATTERN: model at scene origin; camera = mercatorMatrix × aircraft_transform
 // This is the official MapLibre approach — proven to work.
 const threeLayer = (() => {
-  let cam, tpl;
+  let cam, tpl, loader, stalkScene;
+  const modelCache = new Map(); // FR24 basename → { scene } | 'loading' | 'failed'
   // Pre-allocated matrices to avoid GC pressure in render loop
   const M4 = new THREE.Matrix4();
   const Lt = new THREE.Matrix4();
-  const Rz = new THREE.Matrix4();
   const Sc = new THREE.Matrix4();
+  const Rx = new THREE.Matrix4(); // model Y-up → mercator Z-up
+  const Ry = new THREE.Matrix4(); // heading (rotation about model up-axis)
+  const Sz = new THREE.Matrix4(); // stalk scale
 
   function mkScene(model) {
     const sc = new THREE.Scene();
-    sc.add(new THREE.AmbientLight(0xffffff, 0.85));
-    const sun = new THREE.DirectionalLight(0xfff0cc, 0.95);
-    sun.position.set(1, 2, 0.8);
+    sc.add(new THREE.AmbientLight(0xffffff, 1.1));
+    const sun = new THREE.DirectionalLight(0xfff8e0, 1.2);
+    sun.position.set(1, 2, 1);
     sc.add(sun);
+    const fill = new THREE.DirectionalLight(0xd0eeff, 0.7);
+    fill.position.set(-1, 0.5, -1);
+    sc.add(fill);
+    const bottom = new THREE.DirectionalLight(0xffffff, 0.3);
+    bottom.position.set(0, -1, 0); // subtle under-lighting so dark faces aren't pitch black
+    sc.add(bottom);
     model.traverse(o => { o.frustumCulled = false; });
     sc.add(model);
+    sc.userData.model = model;
     return sc;
+  }
+
+  // A thin 1×1×1 box spanning z=0→1 (base at origin), used as a vertical
+  // "stalk" connecting each aircraft to its ground position so altitude is
+  // unmistakable. Scaled per-aircraft: thin in x/y, tall in z.
+  function makeStalkScene() {
+    const g = new THREE.BoxGeometry(1, 1, 1);
+    g.translate(0, 0, 0.5); // base at z=0, top at z=1
+    const m = new THREE.MeshBasicMaterial({
+      color: 0x44eeff, transparent: true, opacity: 0.65,
+      depthTest: false, depthWrite: false });
+    const box = new THREE.Mesh(g, m);
+    box.frustumCulled = false;
+    const sc = new THREE.Scene();
+    sc.add(box);
+    return sc;
+  }
+
+  // Canonicalise a loaded glTF to the convention nose→+X, up→+Y so ALL models
+  // face the same way regardless of how they were authored. Different source
+  // models use different axes (some Y-up, some Z-up, some fuselage-on-Y), so
+  // we detect them from the bounding box: thinnest axis = vertical (up),
+  // longest = fuselage (forward). Then recenter and scale to a uniform size.
+  function normaliseModel(root, rotDeg) {
+    const wrap = new THREE.Group();
+    wrap.frustumCulled = false;
+
+    let box = new THREE.Box3().setFromObject(root);
+    const size = new THREE.Vector3(); box.getSize(size);
+    const dims = [size.x, size.y, size.z];
+    const AX = [new THREE.Vector3(1,0,0), new THREE.Vector3(0,1,0), new THREE.Vector3(0,0,1)];
+    const upI  = dims.indexOf(Math.min(...dims)); // thinnest → vertical
+    let fwdI   = dims.indexOf(Math.max(...dims));  // longest  → fuselage
+    if (fwdI === upI) fwdI = (upI + 1) % 3;
+    const eUp = AX[upI], eFwd = AX[fwdI];
+    const eSide = new THREE.Vector3().crossVectors(eFwd, eUp);
+    // Rotation mapping model's (fwd,up,side) → world (X,Y,Z).
+    const R = new THREE.Matrix4().makeBasis(eFwd, eUp, eSide).transpose();
+    root.applyMatrix4(R);
+
+    // Optional manual offset (degrees) to fix a nose-backwards model.
+    if (rotDeg) {
+      root.rotation.x += THREE.MathUtils.degToRad(rotDeg[0] || 0);
+      root.rotation.y += THREE.MathUtils.degToRad(rotDeg[1] || 0);
+      root.rotation.z += THREE.MathUtils.degToRad(rotDeg[2] || 0);
+    }
+    root.updateMatrixWorld(true);
+
+    // Recenter, then scale so the fuselage length == MODEL_TARGET_UNITS.
+    box = new THREE.Box3().setFromObject(root);
+    const ctr = new THREE.Vector3(); box.getCenter(ctr);
+    box.getSize(size);
+    const k = MODEL_TARGET_UNITS / (Math.max(size.x, size.y, size.z) || 1);
+    root.position.sub(ctr);
+
+    const inner = new THREE.Group();
+    inner.frustumCulled = false;
+    inner.add(root);
+    inner.scale.setScalar(k);
+    inner.traverse(o => {
+      o.frustumCulled = false;
+      if (o.material) { o.material.depthTest = false; o.material.depthWrite = false; }
+    });
+    wrap.add(inner);
+    return wrap;
+  }
+
+  function initLoader() {
+    loader = new GLTFLoader();
+    const draco = new DRACOLoader();
+    draco.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.7/');
+    loader.setDRACOLoader(draco);
+    loader.setMeshoptDecoder(MeshoptDecoder);
+  }
+
+  // Pick the scene for an aircraft: a real FR24 model matching its ICAO type
+  // code if available (loaded on demand and cached), otherwise the procedural
+  // shape for its kind. Loading is async; the procedural shape shows meanwhile.
+  function sceneFor(d) {
+    const name = modelForType(d.typeCode);
+    if (name) {
+      const entry = modelCache.get(name);
+      if (entry && entry !== 'loading' && entry !== 'failed') return entry.scene;
+      if (!entry) {
+        modelCache.set(name, 'loading');
+        loader.load(MODEL_BASE + name + '.glb', (gltf) => {
+          modelCache.set(name, { scene: mkScene(normaliseModel(gltf.scene, null)) });
+          map.triggerRepaint();
+        }, undefined, (err) => {
+          modelCache.set(name, 'failed');
+          console.warn(`[models] ${name}.glb failed, using built-in shape`, err?.message || err);
+        });
+      }
+    }
+    return tpl[d.kind] || null; // fallback while loading / when no match
   }
 
   return {
@@ -485,30 +646,63 @@ const threeLayer = (() => {
         civil_prop:     mkScene(buildCivProp()),
         civil_heli:     mkScene(buildCivHeli()),
       };
+
+      initLoader();
+      stalkScene = makeStalkScene();
     },
 
-    render(gl, mercatorMatrix) {
-      // mercatorMatrix = projection × view in mercator space.
-      // For each aircraft: camera = mercatorMatrix × T × Rz × S
-      // Model sits at origin; camera encodes its position + heading.
-      M4.fromArray(mercatorMatrix);
-      threeRenderer.resetState(); // sync Three.js state with GL after MapLibre draw
+    render(gl, options) {
+      // MapLibre v5: defaultProjectionData.mainMatrix maps mercator [0,1]
+      // coordinates → clip space, matching MercatorCoordinate.fromLngLat.
+      M4.fromArray(options.defaultProjectionData.mainMatrix);
+
+      // Screen-space scale: MODEL_PX pixels per geometry unit at every zoom.
+      // 512 * 2^zoom = mercator pixels per world unit (standard MapLibre tile math).
+      // Account for devicePixelRatio: the WebGL canvas renders at native
+      // resolution, so on a 2× display 1 CSS px = 2 device px.
+      const dpr = window.devicePixelRatio || 1;
+      const pxPerMercator = 512 * Math.pow(2, map.getZoom()) * dpr;
+      const s = MODEL_PX / pxPerMercator; // screen-constant model size
+
+      // resetState + clearDepth: re-sync Three.js with MapLibre's GL state and
+      // give models a fresh depth buffer so they self-occlude correctly.
+      threeRenderer.resetState();
+      threeRenderer.clearDepth();
 
       for (const [, d] of flightMap) {
         if (d.onGround) continue;
-        const sc = tpl[d.kind];
+        const sc = sceneFor(d);
         if (!sc) continue;
 
-        const mc = maplibregl.MercatorCoordinate.fromLngLat([d.lon, d.lat], d.displayAltM);
-        const s  = mc.meterInMercatorCoordinateUnits() * MODEL_M;
-        const θ  = THREE.MathUtils.degToRad(d.track || 0) - Math.PI / 2;
+        // Height from real altitude data: lift the model in screen-pixels
+        // proportional to its reported altitude (consistent across zooms).
+        const ground  = maplibregl.MercatorCoordinate.fromLngLat([d.lon, d.lat], 0);
+        const altFt   = d.altFt != null ? d.altFt : 0;
+        const altPx   = Math.min(Math.max((altFt / 1000) * ALT_PX_PER_1000FT, ALT_PX_MIN), ALT_PX_MAX);
+        const altMerc = altPx / pxPerMercator; // height in mercator units (screen-constant)
 
-        Lt.makeTranslation(mc.x, mc.y, mc.z);
-        Rz.makeRotationZ(θ);
+        // Altitude stalk: a vertical bar from the surface up to the aircraft.
+        if (ALT_STALK && altPx > ALT_PX_MIN + 1) {
+          const wMerc = 1.6 / pxPerMercator; // ~1.6px-wide bar
+          Lt.makeTranslation(ground.x, ground.y, 0);
+          Sz.makeScale(wMerc, wMerc, altMerc); // thin box stretched to altitude
+          cam.projectionMatrix.copy(M4).multiply(Lt).multiply(Sz);
+          threeRenderer.render(stalkScene, cam);
+        }
+
+        // Heading: models are built nose→+X, up→+Y. Ry(π/2 − track) points the
+        // nose along the compass heading; Rx(π/2) lays the model flat so its
+        // up-axis aligns with mercator Z (altitude). Without Rx the aircraft
+        // would stand on its wingtip and appear as an invisible sliver.
+        const h = Math.PI / 2 - THREE.MathUtils.degToRad(d.track || 0);
+
+        Lt.makeTranslation(ground.x, ground.y, altMerc);
         Sc.makeScale(s, -s, s); // −s on Y: mercator Y is south-positive (inverted)
+        Rx.makeRotationX(Math.PI / 2);
+        Ry.makeRotationY(h);
 
-        // camera = mercatorMatrix × (T × Rz × S)
-        cam.projectionMatrix.copy(M4).multiply(Lt).multiply(Rz).multiply(Sc);
+        // camera = mainMatrix × T × S × Rx × Ry  (model sits at scene origin)
+        cam.projectionMatrix.copy(M4).multiply(Lt).multiply(Sc).multiply(Rx).multiply(Ry);
         threeRenderer.render(sc, cam);
       }
 
@@ -547,7 +741,7 @@ const labelsEl = document.getElementById('labels');
 const labelEls = new Map();
 
 function refreshLabels() {
-  if (map.getZoom() < 5) { labelsEl.style.display = 'none'; return; }
+  if (map.getZoom() < 3.5) { labelsEl.style.display = 'none'; return; }
   labelsEl.style.display = '';
   const W = window.innerWidth, H = window.innerHeight;
   const vis = new Set();
@@ -631,10 +825,9 @@ async function fetchAndUpdate() {
       const altFt    = typeof s.alt_baro === 'number' ? s.alt_baro
                      : typeof s.altitude  === 'number' ? s.altitude : null;
       const onGround = s.alt_baro === 'ground' || s.on_ground === true || s.on_ground === 1;
-      const displayAltM = onGround ? 0 : Math.max((altFt ?? 15000) * 0.3048 * ALT_EXAG, 4000);
 
       const d = {
-        hex, lat, lon, altFt, displayAltM, onGround,
+        hex, lat, lon, altFt, onGround,
         gs:       s.gs      ?? s.velocity    ?? null,
         track:    s.track   ?? s.true_track  ?? null,
         callsign: (s.flight ?? s.callsign    ?? '').trim(),
@@ -646,6 +839,11 @@ async function fetchAndUpdate() {
       newMap.set(hex, d);
     }
 
+    // Keep military aircraft only
+    for (const [hex, d] of newMap) {
+      if (!d.mil) newMap.delete(hex);
+    }
+
     // Remove stale labels
     for (const [hex, el] of labelEls) {
       if (!newMap.has(hex)) { el.remove(); labelEls.delete(hex); }
@@ -653,13 +851,11 @@ async function fetchAndUpdate() {
 
     flightMap = newMap;
 
-    const civ = [...newMap.values()].filter(d => !d.onGround && !d.mil).length;
-    const mil = [...newMap.values()].filter(d => !d.onGround &&  d.mil).length;
-    document.getElementById('hdr-count').textContent = civ.toLocaleString();
+    const mil = [...newMap.values()].filter(d => !d.onGround).length;
     document.getElementById('hdr-mil').textContent   = mil.toLocaleString();
     document.getElementById('hdr-time').textContent  =
       new Date().toLocaleTimeString([], { hour:'2-digit', minute:'2-digit', second:'2-digit' });
-    setStatus('', `${civ+mil} aircraft · ${mil} military · refreshes every 15 s`);
+    setStatus('', `${mil} military aircraft · refreshes every 15 s`);
   } catch(e) {
     setStatus('err', 'Could not reach server — retrying in 15 s');
     console.warn('[flights]', e);
