@@ -230,7 +230,7 @@ const MODEL_TARGET_UNITS = 14;
 // Model size is screen-constant: aircraft stay the same readable size at every
 // zoom level (zooming the map does NOT balloon them), and their height is
 // computed separately so zoom never moves them up or down.
-const MODEL_PX = 3.6; // screen-px per geometry unit (~50px aircraft)
+const MODEL_PX = 5; // screen-px per geometry unit (~70px aircraft)
 // Altitude → on-screen height. Models are lifted in proportion to their
 // real reported altitude so higher aircraft sit visibly higher.
 // ALT_PX_PER_1000FT screen-px per 1000 ft (e.g. FL350 → 35×4 = 140 px up).
@@ -539,21 +539,29 @@ const threeLayer = (() => {
     return sc;
   }
 
-  // Normalise a loaded glTF: recenter at origin, auto-align the longest
-  // horizontal axis to +X (nose), scale to MODEL_TARGET_UNITS, apply any
-  // manual rotation offset. Result matches the procedural convention
-  // (nose→+X, up→+Y) so the render-loop transform works unchanged.
+  // Canonicalise a loaded glTF to the convention nose→+X, up→+Y so ALL models
+  // face the same way regardless of how they were authored. Different source
+  // models use different axes (some Y-up, some Z-up, some fuselage-on-Y), so
+  // we detect them from the bounding box: thinnest axis = vertical (up),
+  // longest = fuselage (forward). Then recenter and scale to a uniform size.
   function normaliseModel(root, rotDeg) {
     const wrap = new THREE.Group();
     wrap.frustumCulled = false;
 
-    // glTF is Y-up. If the model is longer along Z than X, rotate 90° about Y
-    // so the fuselage runs along X.
     let box = new THREE.Box3().setFromObject(root);
     const size = new THREE.Vector3(); box.getSize(size);
-    if (size.z > size.x) root.rotation.y = Math.PI / 2;
+    const dims = [size.x, size.y, size.z];
+    const AX = [new THREE.Vector3(1,0,0), new THREE.Vector3(0,1,0), new THREE.Vector3(0,0,1)];
+    const upI  = dims.indexOf(Math.min(...dims)); // thinnest → vertical
+    let fwdI   = dims.indexOf(Math.max(...dims));  // longest  → fuselage
+    if (fwdI === upI) fwdI = (upI + 1) % 3;
+    const eUp = AX[upI], eFwd = AX[fwdI];
+    const eSide = new THREE.Vector3().crossVectors(eFwd, eUp);
+    // Rotation mapping model's (fwd,up,side) → world (X,Y,Z).
+    const R = new THREE.Matrix4().makeBasis(eFwd, eUp, eSide).transpose();
+    root.applyMatrix4(R);
 
-    // Manual per-model rotation offset (degrees).
+    // Optional manual offset (degrees) to fix a nose-backwards model.
     if (rotDeg) {
       root.rotation.x += THREE.MathUtils.degToRad(rotDeg[0] || 0);
       root.rotation.y += THREE.MathUtils.degToRad(rotDeg[1] || 0);
@@ -561,12 +569,11 @@ const threeLayer = (() => {
     }
     root.updateMatrixWorld(true);
 
-    // Recenter and scale so the longest dimension == MODEL_TARGET_UNITS.
+    // Recenter, then scale so the fuselage length == MODEL_TARGET_UNITS.
     box = new THREE.Box3().setFromObject(root);
     const ctr = new THREE.Vector3(); box.getCenter(ctr);
     box.getSize(size);
-    const maxDim = Math.max(size.x, size.y, size.z) || 1;
-    const k = MODEL_TARGET_UNITS / maxDim;
+    const k = MODEL_TARGET_UNITS / (Math.max(size.x, size.y, size.z) || 1);
     root.position.sub(ctr);
 
     const inner = new THREE.Group();
