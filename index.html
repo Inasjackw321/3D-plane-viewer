@@ -6,7 +6,14 @@
   <title>Military 3D Flight Tracker</title>
   <link href="https://unpkg.com/maplibre-gl@5/dist/maplibre-gl.css" rel="stylesheet">
   <script src="https://unpkg.com/maplibre-gl@5/dist/maplibre-gl.js"></script>
-  <script src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+    }
+  }
+  </script>
   <style>
     *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
     html, body { width: 100%; height: 100%; overflow: hidden; background: #0a0e1a;
@@ -176,9 +183,27 @@
   <span id="status-msg">Initialising…</span>
 </div>
 
-<script>
+<script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+
 // ── config ────────────────────────────────────────────────────
 const REFRESH_MS = 15000;
+
+// External glTF models per aircraft kind. Drop downloaded .glb files into
+// a models/ folder next to index.html using these exact names. Any kind
+// without a file (or that fails to load) falls back to the built-in
+// procedural geometry, so the app always works.
+//   rotDeg: [x,y,z] extra rotation (degrees) if a model faces the wrong way.
+//   The loader auto-aligns the longest axis to +X (nose) and normalises size.
+const MODEL_FILES = {
+  cargo: { url: 'models/c17.glb',   rotDeg: [0, 0, 0] }, // C-17 Globemaster III
+  tanker:{ url: 'models/kc46.glb',  rotDeg: [0, 0, 0] }, // KC-46A Pegasus
+  awacs: { url: 'models/e3.glb',    rotDeg: [0, 0, 0] }, // E-3 Sentry AWACS
+};
+// Target length (in geometry units) every loaded model is scaled to, so all
+// aircraft render at a consistent on-screen size via MODEL_PX.
+const MODEL_TARGET_UNITS = 14;
 // MODEL_PX: target screen-pixels per geometry unit.
 // Using a screen-space constant keeps models visible at every zoom level
 // (fixed-physical-size blows up to thousands of px when zoomed in).
@@ -457,13 +482,76 @@ const threeLayer = (() => {
 
   function mkScene(model) {
     const sc = new THREE.Scene();
-    sc.add(new THREE.AmbientLight(0xffffff, 0.85));
-    const sun = new THREE.DirectionalLight(0xfff0cc, 0.95);
+    sc.add(new THREE.AmbientLight(0xffffff, 0.95));
+    const sun = new THREE.DirectionalLight(0xfff0cc, 1.1);
     sun.position.set(1, 2, 0.8);
     sc.add(sun);
+    const sun2 = new THREE.DirectionalLight(0xcce0ff, 0.6);
+    sun2.position.set(-1, 1, -0.8);
+    sc.add(sun2);
     model.traverse(o => { o.frustumCulled = false; });
     sc.add(model);
+    sc.userData.model = model; // track current model so it can be swapped
     return sc;
+  }
+
+  // Normalise a loaded glTF: recenter at origin, auto-align the longest
+  // horizontal axis to +X (nose), scale to MODEL_TARGET_UNITS, apply any
+  // manual rotation offset. Result matches the procedural convention
+  // (nose→+X, up→+Y) so the render-loop transform works unchanged.
+  function normaliseModel(root, rotDeg) {
+    const wrap = new THREE.Group();
+    wrap.frustumCulled = false;
+
+    // glTF is Y-up. If the model is longer along Z than X, rotate 90° about Y
+    // so the fuselage runs along X.
+    let box = new THREE.Box3().setFromObject(root);
+    const size = new THREE.Vector3(); box.getSize(size);
+    if (size.z > size.x) root.rotation.y = Math.PI / 2;
+
+    // Manual per-model rotation offset (degrees).
+    if (rotDeg) {
+      root.rotation.x += THREE.MathUtils.degToRad(rotDeg[0] || 0);
+      root.rotation.y += THREE.MathUtils.degToRad(rotDeg[1] || 0);
+      root.rotation.z += THREE.MathUtils.degToRad(rotDeg[2] || 0);
+    }
+    root.updateMatrixWorld(true);
+
+    // Recenter and scale so the longest dimension == MODEL_TARGET_UNITS.
+    box = new THREE.Box3().setFromObject(root);
+    const ctr = new THREE.Vector3(); box.getCenter(ctr);
+    box.getSize(size);
+    const maxDim = Math.max(size.x, size.y, size.z) || 1;
+    const k = MODEL_TARGET_UNITS / maxDim;
+    root.position.sub(ctr);
+
+    const inner = new THREE.Group();
+    inner.frustumCulled = false;
+    inner.add(root);
+    inner.scale.setScalar(k);
+    inner.traverse(o => {
+      o.frustumCulled = false;
+      if (o.material) { o.material.depthTest = false; o.material.depthWrite = false; }
+    });
+    wrap.add(inner);
+    return wrap;
+  }
+
+  function loadModels() {
+    const loader = new GLTFLoader();
+    for (const [kind, cfg] of Object.entries(MODEL_FILES)) {
+      loader.load(cfg.url, (gltf) => {
+        const scene = tpl[kind];
+        if (!scene) return;
+        const norm = normaliseModel(gltf.scene, cfg.rotDeg);
+        scene.remove(scene.userData.model); // drop the procedural placeholder
+        scene.add(norm);
+        scene.userData.model = norm;
+        map.triggerRepaint();
+      }, undefined, (err) => {
+        console.warn(`[models] ${kind}: ${cfg.url} not loaded, using built-in shape`, err?.message || err);
+      });
+    }
   }
 
   return {
@@ -488,6 +576,8 @@ const threeLayer = (() => {
         civil_prop:     mkScene(buildCivProp()),
         civil_heli:     mkScene(buildCivHeli()),
       };
+
+      loadModels(); // swap in downloaded glTF models as they finish loading
     },
 
     render(gl, options) {
