@@ -182,7 +182,7 @@ const REFRESH_MS = 15000;
 // MODEL_PX: target screen-pixels per geometry unit.
 // Using a screen-space constant keeps models visible at every zoom level
 // (fixed-physical-size blows up to thousands of px when zoomed in).
-const MODEL_PX    = 12;
+const MODEL_PX    = 18;
 // Altitude clamped to [MIN_ALT_PX … MAX_ALT_PX] screen-pixel equivalents
 // so aircraft are always on-screen regardless of zoom or reported altitude.
 const MIN_ALT_PX  = 25;
@@ -451,8 +451,9 @@ const threeLayer = (() => {
   // Pre-allocated matrices to avoid GC pressure in render loop
   const M4 = new THREE.Matrix4();
   const Lt = new THREE.Matrix4();
-  const Rz = new THREE.Matrix4();
   const Sc = new THREE.Matrix4();
+  const Rx = new THREE.Matrix4(); // model Y-up → mercator Z-up
+  const Ry = new THREE.Matrix4(); // heading (rotation about model up-axis)
 
   function mkScene(model) {
     const sc = new THREE.Scene();
@@ -490,12 +491,8 @@ const threeLayer = (() => {
     },
 
     render(gl, options) {
-      // MapLibre v3+ passes a CustomRenderMethodInput options object.
-      // modelViewProjectionMatrix is the world→clip matrix (replaces the
-      // raw Float32Array that older MapLibre versions passed directly).
-      // defaultProjectionData.mainMatrix is the mercator [0,1]→clip matrix,
-      // compatible with MercatorCoordinate.fromLngLat values.
-      // (modelViewProjectionMatrix uses tile-local world space, not [0,1] mercator.)
+      // MapLibre v5: defaultProjectionData.mainMatrix maps mercator [0,1]
+      // coordinates → clip space, matching MercatorCoordinate.fromLngLat.
       M4.fromArray(options.defaultProjectionData.mainMatrix);
 
       // Screen-space scale: MODEL_PX pixels per geometry unit at every zoom.
@@ -503,32 +500,37 @@ const threeLayer = (() => {
       const pxPerMercator = 512 * Math.pow(2, map.getZoom());
       const s = MODEL_PX / pxPerMercator;
 
+      // resetState once: re-sync Three.js with the GL state MapLibre left behind.
+      threeRenderer.resetState();
+
       for (const [, d] of flightMap) {
         if (d.onGround) continue;
         const sc = tpl[d.kind];
         if (!sc) continue;
 
-        // Ground position
-        const mc = maplibregl.MercatorCoordinate.fromLngLat([d.lon, d.lat], 0);
-
-        // Altitude: clamp to [MIN_ALT_PX … MAX_ALT_PX] screen-pixel equivalents
-        // so the model is always on-screen regardless of zoom or actual altitude.
-        const physPx = d.altFt != null
-          ? d.altFt * 0.3048 * mc.meterInMercatorCoordinateUnits() * pxPerMercator
-          : 0;
+        // Altitude in screen-pixel equivalents, clamped so the model stays
+        // close to its label and on-screen at any zoom.
+        const meterMerc = maplibregl.MercatorCoordinate.fromLngLat([d.lon, d.lat], 0)
+                            .meterInMercatorCoordinateUnits();
+        const physPx = d.altFt != null ? d.altFt * 0.3048 * meterMerc * pxPerMercator : 0;
         const altPx  = Math.min(Math.max(physPx, MIN_ALT_PX), MAX_ALT_PX);
-        const altZ   = altPx / pxPerMercator;
+        const altM   = (altPx / pxPerMercator) / meterMerc;
 
-        const θ = THREE.MathUtils.degToRad(d.track || 0) - Math.PI / 2;
+        const mc = maplibregl.MercatorCoordinate.fromLngLat([d.lon, d.lat], altM);
 
-        Lt.makeTranslation(mc.x, mc.y, altZ);
-        Rz.makeRotationZ(θ);
+        // Heading: models are built nose→+X, up→+Y. Ry(π/2 − track) points the
+        // nose along the compass heading; Rx(π/2) lays the model flat so its
+        // up-axis aligns with mercator Z (altitude). Without Rx the aircraft
+        // would stand on its wingtip and appear as an invisible sliver.
+        const h = Math.PI / 2 - THREE.MathUtils.degToRad(d.track || 0);
+
+        Lt.makeTranslation(mc.x, mc.y, mc.z);
         Sc.makeScale(s, -s, s); // −s on Y: mercator Y is south-positive (inverted)
+        Rx.makeRotationX(Math.PI / 2);
+        Ry.makeRotationY(h);
 
-        // camera = mercatorMatrix × (T × Rz × S)
-        cam.projectionMatrix.copy(M4).multiply(Lt).multiply(Rz).multiply(Sc);
-        // resetState before each draw so Three.js re-syncs with MapLibre's GL state
-        threeRenderer.resetState();
+        // camera = mainMatrix × T × S × Rx × Ry  (model sits at scene origin)
+        cam.projectionMatrix.copy(M4).multiply(Lt).multiply(Sc).multiply(Rx).multiply(Ry);
         threeRenderer.render(sc, cam);
       }
 
