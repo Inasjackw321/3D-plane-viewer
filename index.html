@@ -210,10 +210,12 @@ const MODEL_TARGET_UNITS = 14;
 // Using a screen-space constant keeps models visible at every zoom level
 // (fixed-physical-size blows up to thousands of px when zoomed in).
 const MODEL_PX    = 2.2;
-// Altitude clamped to [MIN_ALT_PX … MAX_ALT_PX] screen-pixel equivalents
-// so aircraft are always on-screen regardless of zoom or reported altitude.
-const MIN_ALT_PX  = 25;
-const MAX_ALT_PX  = 160;
+// Altitude → on-screen height. Models are lifted in proportion to their
+// real reported altitude so higher aircraft sit visibly higher.
+// ALT_PX_PER_1000FT screen-px per 1000 ft (e.g. FL350 → 35×4 = 140 px up).
+const ALT_PX_PER_1000FT = 4;
+const ALT_PX_MIN = 8;    // ground-skimming aircraft still clear the surface
+const ALT_PX_MAX = 320;  // safety cap so extreme altitudes stay on-screen
 
 const REGION_VIEWS = {
   middle_east:   { center: [45,  27], zoom: 5.5, pitch: 72 },
@@ -608,12 +610,12 @@ const threeLayer = (() => {
         const sc = tpl[d.kind];
         if (!sc) continue;
 
-        // Altitude in screen-pixel equivalents, clamped so the model stays
-        // close to its label and on-screen at any zoom.
+        // Height based on real altitude data: lift the model in screen-pixels
+        // proportional to its reported altitude (kept consistent across zooms).
         const meterMerc = maplibregl.MercatorCoordinate.fromLngLat([d.lon, d.lat], 0)
                             .meterInMercatorCoordinateUnits();
-        const physPx = d.altFt != null ? d.altFt * 0.3048 * meterMerc * pxPerMercator : 0;
-        const altPx  = Math.min(Math.max(physPx, MIN_ALT_PX), MAX_ALT_PX);
+        const altFt  = d.altFt != null ? d.altFt : 0;
+        const altPx  = Math.min(Math.max((altFt / 1000) * ALT_PX_PER_1000FT, ALT_PX_MIN), ALT_PX_MAX);
         const altM   = (altPx / pxPerMercator) / meterMerc;
 
         const mc = maplibregl.MercatorCoordinate.fromLngLat([d.lon, d.lat], altM);
