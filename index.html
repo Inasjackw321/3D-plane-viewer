@@ -230,7 +230,7 @@ const MODEL_TARGET_UNITS = 14;
 // Model size is screen-constant: aircraft stay the same readable size at every
 // zoom level (zooming the map does NOT balloon them), and their height is
 // computed separately so zoom never moves them up or down.
-const MODEL_PX = 5; // screen-px per geometry unit (~70px aircraft)
+const MODEL_PX = 7; // screen-px per geometry unit (~90px aircraft)
 // Altitude → on-screen height. Models are lifted in proportion to their
 // real reported altitude so higher aircraft sit visibly higher.
 // ALT_PX_PER_1000FT screen-px per 1000 ft (e.g. FL350 → 35×4 = 140 px up).
@@ -269,7 +269,7 @@ map = new maplibregl.Map({
   center: REGION_VIEWS.middle_east.center,
   zoom:   REGION_VIEWS.middle_east.zoom,
   pitch:  REGION_VIEWS.middle_east.pitch,
-  antialias: true, maxPitch: 85,
+  maxPitch: 85,
   canvasContextAttributes: {antialias: true},
 });
 map.on('load', () => {
@@ -279,21 +279,24 @@ map.on('load', () => {
 });
 
 // ── materials ─────────────────────────────────────────────────
-function mat(color, emissive, ei = 0.55) {
-  return new THREE.MeshLambertMaterial({ color, emissive, emissiveIntensity: ei,
-    depthTest: false, depthWrite: false });
+// PBR materials with depth test on so models self-occlude correctly.
+// Emissive lift ensures the colour reads clearly against the dark map.
+function mat(color, emissive, ei = 0.35) {
+  return new THREE.MeshStandardMaterial({
+    color, emissive, emissiveIntensity: ei,
+    metalness: 0.3, roughness: 0.45 });
 }
 const M = {
-  fighter:  mat(0x22ff66, 0x00aa33, 0.65),
-  tanker:   mat(0x55aaff, 0x1166bb, 0.55),
-  awacs:    mat(0xffee44, 0xcc8800, 0.55),
-  awacsDsk: mat(0xffff00, 0xffaa00, 0.90),
-  cargo:    mat(0xaa88ff, 0x5533aa, 0.50),
-  atkHeli:  mat(0x44ffcc, 0x009966, 0.65),
-  trnHeli:  mat(0x44ffaa, 0x008844, 0.60),
-  civJet:   mat(0xff8800, 0xff4400, 0.45),
-  civProp:  mat(0xffaa00, 0xff6600, 0.40),
-  civHeli:  mat(0xff6600, 0xff2200, 0.50),
+  fighter:  mat(0x44ff88, 0x0d4020),
+  tanker:   mat(0x55bbff, 0x0d2a55),
+  awacs:    mat(0xffdd44, 0x55380a),
+  awacsDsk: mat(0xffee44, 0x6a4800, 0.7),
+  cargo:    mat(0xbb99ff, 0x2a1f55),
+  atkHeli:  mat(0x44ffcc, 0x0a3d2e),
+  trnHeli:  mat(0x44ffaa, 0x0a3a1f),
+  civJet:   mat(0xff9955, 0x4a2606),
+  civProp:  mat(0xffbb44, 0x4a2e06),
+  civHeli:  mat(0xff8844, 0x4a1f06),
 };
 
 // ── geometry helpers ──────────────────────────────────────────
@@ -510,13 +513,16 @@ const threeLayer = (() => {
 
   function mkScene(model) {
     const sc = new THREE.Scene();
-    sc.add(new THREE.AmbientLight(0xffffff, 0.95));
-    const sun = new THREE.DirectionalLight(0xfff0cc, 1.1);
-    sun.position.set(1, 2, 0.8);
+    sc.add(new THREE.AmbientLight(0xffffff, 1.1));
+    const sun = new THREE.DirectionalLight(0xfff8e0, 1.2);
+    sun.position.set(1, 2, 1);
     sc.add(sun);
-    const sun2 = new THREE.DirectionalLight(0xcce0ff, 0.6);
-    sun2.position.set(-1, 1, -0.8);
-    sc.add(sun2);
+    const fill = new THREE.DirectionalLight(0xd0eeff, 0.7);
+    fill.position.set(-1, 0.5, -1);
+    sc.add(fill);
+    const bottom = new THREE.DirectionalLight(0xffffff, 0.3);
+    bottom.position.set(0, -1, 0); // subtle under-lighting so dark faces aren't pitch black
+    sc.add(bottom);
     model.traverse(o => { o.frustumCulled = false; });
     sc.add(model);
     sc.userData.model = model;
@@ -530,7 +536,7 @@ const threeLayer = (() => {
     const g = new THREE.BoxGeometry(1, 1, 1);
     g.translate(0, 0, 0.5); // base at z=0, top at z=1
     const m = new THREE.MeshBasicMaterial({
-      color: 0x66ccff, transparent: true, opacity: 0.55,
+      color: 0x44eeff, transparent: true, opacity: 0.65,
       depthTest: false, depthWrite: false });
     const box = new THREE.Mesh(g, m);
     box.frustumCulled = false;
@@ -658,8 +664,10 @@ const threeLayer = (() => {
       const pxPerMercator = 512 * Math.pow(2, map.getZoom()) * dpr;
       const s = MODEL_PX / pxPerMercator; // screen-constant model size
 
-      // resetState once: re-sync Three.js with the GL state MapLibre left behind.
+      // resetState + clearDepth: re-sync Three.js with MapLibre's GL state and
+      // give models a fresh depth buffer so they self-occlude correctly.
       threeRenderer.resetState();
+      threeRenderer.clearDepth();
 
       for (const [, d] of flightMap) {
         if (d.onGround) continue;
