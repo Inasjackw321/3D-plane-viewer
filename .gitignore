@@ -1,6 +1,7 @@
-# 3D model binaries — kept local, not pushed (GitHub blocks files >100 MB).
-# The app loads these from disk at runtime; missing files fall back to the
-# built-in procedural shapes, so the repo still works without them.
-*.glb
-*.gltf
-*.bin
+# Large model binaries dropped next to index.html stay local (GitHub blocks
+# files >100 MB). The small converted models in assets/ ARE committed so the
+# app has real 3D models out of the box.
+/*.glb
+/*.gltf
+/*.bin
+!assets/

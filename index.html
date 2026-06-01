@@ -192,39 +192,36 @@ import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 // ── config ────────────────────────────────────────────────────
 const REFRESH_MS = 15000;
 
-// Real aircraft models load from the Flightradar24 open 3D-model set
-// (GPL-2, CORS-enabled), keyed by each aircraft's real ICAO type code, so
-// the model matches the actual aircraft. The browser fetches them directly
-// at runtime — nothing to download or store locally.
-const FR24_BASE = 'https://raw.githubusercontent.com/Flightradar24/fr24-3d-models/master/models/';
-// Self-contained .glb files available in that set (multi-file .gltf omitted).
-const FR24_HAVE = new Set([
-  'a318','a319','a320','a321','a332','a333','a343','a346','a359','a380',
-  'b736','b737','b738','b739','b744','b748','b752','b753','b762','b763','b764',
-  'b772','b773','b788','b789','atr42','bae146','crj700','crj900','cs100','cs300',
-  'e170','e190','q400','beluga','citation','heli','pa28',
+// Real aircraft models: Flightradar24 open models (GPL-2) converted from
+// glTF 1.0 → 2.0 (Three.js only loads 2.0) and committed to assets/, so they
+// load locally with no setup. Keyed by each aircraft's real ICAO type code.
+const MODEL_BASE = 'assets/';
+// glTF-2.0 models committed in assets/ (real, textured airliner airframes).
+const MODEL_HAVE = new Set([
+  'a320','a321','a332','a333','b738','b744','b762','b763','b772','heli',
 ]);
-// Military ICAO type → closest airframe in the set (many military jets are
-// airliner derivatives: KC-46≈767, A330 MRTT≈A330, E-7/P-8≈737, KC-135≈narrowbody).
+// Military ICAO type → closest available airframe. Many military jets ARE
+// airliner derivatives: KC-46 = 767, A330 MRTT = A330, E-7/P-8 = 737,
+// KC-135/E-3 = 4-engine (stand-in 747), KC-10 = widebody.
 const MIL_TYPE_MODEL = {
   KC46:'b762', K46:'b762', A310:'b762',
-  K35R:'b752', K35E:'b752', KC135:'b752', VC10:'b752',
-  KC10:'b763', DC10:'b763', MD11:'b763', E767:'b763',
-  E3TF:'a346', E3CF:'a346', E3D:'a346', E3:'a346', E3S:'a346',
-  P3:'a346', P3C:'a346', RC135:'a346', WC135:'a346', TC135:'a346', OC135:'a346',
+  K35R:'b763', K35E:'b763', KC135:'b763', VC10:'b763', C135:'b763', C137:'b763', C32:'b762',
+  KC10:'b772', DC10:'b772', MD11:'b772',
+  E3TF:'b744', E3CF:'b744', E3D:'b744', E3:'b744', E3S:'b744', E767:'b744', E4:'b744',
+  P3:'b744', P3C:'b744', RC135:'b744', WC135:'b744', TC135:'b744', OC135:'b744',
   E7:'b738', E7W:'b738', P8:'b738', B38M:'b738', C40:'b738',
-  C32:'b752', C137:'b752',
+  A332:'a332', A333:'a333',
   // fighters, C-17/C-130/A400 transports and helicopters keep their purpose-built
   // procedural shapes (no airliner looks right), so they are intentionally absent.
 };
-// Resolve an aircraft to an FR24 model basename, or null to keep the
+// Resolve an aircraft to a committed model basename, or null to keep the
 // procedural shape. Tries the military map first, then the raw ICAO code.
 function modelForType(typeCode) {
   const t = (typeCode || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
   if (!t) return null;
-  if (MIL_TYPE_MODEL[t]) return MIL_TYPE_MODEL[t];
+  if (MIL_TYPE_MODEL[t] && MODEL_HAVE.has(MIL_TYPE_MODEL[t])) return MIL_TYPE_MODEL[t];
   const lc = t.toLowerCase();
-  if (FR24_HAVE.has(lc)) return lc;
+  if (MODEL_HAVE.has(lc)) return lc;
   return null;
 }
 // Target length (in geometry units) every loaded model is scaled to, so all
@@ -602,7 +599,7 @@ const threeLayer = (() => {
       if (entry && entry !== 'loading' && entry !== 'failed') return entry.scene;
       if (!entry) {
         modelCache.set(name, 'loading');
-        loader.load(FR24_BASE + name + '.glb', (gltf) => {
+        loader.load(MODEL_BASE + name + '.glb', (gltf) => {
           modelCache.set(name, { scene: mkScene(normaliseModel(gltf.scene, null)) });
           map.triggerRepaint();
         }, undefined, (err) => {
