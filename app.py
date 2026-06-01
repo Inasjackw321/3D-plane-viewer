@@ -58,6 +58,13 @@ def fetch_mil():
 
 
 class Handler(http.server.SimpleHTTPRequestHandler):
+    # Serve locally-stored 3D model files with correct MIME types.
+    extensions_map = {
+        **http.server.SimpleHTTPRequestHandler.extensions_map,
+        ".glb":  "model/gltf-binary",
+        ".gltf": "model/gltf+json",
+    }
+
     def do_GET(self):
         if self.path.startswith("/api/flights"):
             self._proxy()
