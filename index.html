@@ -192,17 +192,41 @@ import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 // ── config ────────────────────────────────────────────────────
 const REFRESH_MS = 15000;
 
-// External glTF models per aircraft kind. Drop downloaded .glb files into
-// a models/ folder next to index.html using these exact names. Any kind
-// without a file (or that fails to load) falls back to the built-in
-// procedural geometry, so the app always works.
-//   rotDeg: [x,y,z] extra rotation (degrees) if a model faces the wrong way.
-//   The loader auto-aligns the longest axis to +X (nose) and normalises size.
-const MODEL_FILES = {
-  cargo: { url: 'modelsc17.glb',  rotDeg: [0, 0, 0] }, // C-17 Globemaster III
-  tanker:{ url: 'modelskc46.glb', rotDeg: [0, 0, 0] }, // KC-46A Pegasus
-  awacs: { url: 'modelse3.glb',   rotDeg: [0, 0, 0] }, // E-3 Sentry AWACS
+// Real aircraft models load from the Flightradar24 open 3D-model set
+// (GPL-2, CORS-enabled), keyed by each aircraft's real ICAO type code, so
+// the model matches the actual aircraft. The browser fetches them directly
+// at runtime — nothing to download or store locally.
+const FR24_BASE = 'https://raw.githubusercontent.com/Flightradar24/fr24-3d-models/master/models/';
+// Self-contained .glb files available in that set (multi-file .gltf omitted).
+const FR24_HAVE = new Set([
+  'a318','a319','a320','a321','a332','a333','a343','a346','a359','a380',
+  'b736','b737','b738','b739','b744','b748','b752','b753','b762','b763','b764',
+  'b772','b773','b788','b789','atr42','bae146','crj700','crj900','cs100','cs300',
+  'e170','e190','q400','beluga','citation','heli','pa28',
+]);
+// Military ICAO type → closest airframe in the set (many military jets are
+// airliner derivatives: KC-46≈767, A330 MRTT≈A330, E-7/P-8≈737, KC-135≈narrowbody).
+const MIL_TYPE_MODEL = {
+  KC46:'b762', K46:'b762', A310:'b762',
+  K35R:'b752', K35E:'b752', KC135:'b752', VC10:'b752',
+  KC10:'b763', DC10:'b763', MD11:'b763', E767:'b763',
+  E3TF:'a346', E3CF:'a346', E3D:'a346', E3:'a346', E3S:'a346',
+  P3:'a346', P3C:'a346', RC135:'a346', WC135:'a346', TC135:'a346', OC135:'a346',
+  E7:'b738', E7W:'b738', P8:'b738', B38M:'b738', C40:'b738',
+  C32:'b752', C137:'b752',
+  // fighters, C-17/C-130/A400 transports and helicopters keep their purpose-built
+  // procedural shapes (no airliner looks right), so they are intentionally absent.
 };
+// Resolve an aircraft to an FR24 model basename, or null to keep the
+// procedural shape. Tries the military map first, then the raw ICAO code.
+function modelForType(typeCode) {
+  const t = (typeCode || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  if (!t) return null;
+  if (MIL_TYPE_MODEL[t]) return MIL_TYPE_MODEL[t];
+  const lc = t.toLowerCase();
+  if (FR24_HAVE.has(lc)) return lc;
+  return null;
+}
 // Target length (in geometry units) every loaded model is scaled to, so all
 // aircraft render at a consistent on-screen size via MODEL_PX.
 const MODEL_TARGET_UNITS = 14;
@@ -213,9 +237,10 @@ const MODEL_PX    = 2.2;
 // Altitude → on-screen height. Models are lifted in proportion to their
 // real reported altitude so higher aircraft sit visibly higher.
 // ALT_PX_PER_1000FT screen-px per 1000 ft (e.g. FL350 → 35×4 = 140 px up).
-const ALT_PX_PER_1000FT = 4;
-const ALT_PX_MIN = 8;    // ground-skimming aircraft still clear the surface
-const ALT_PX_MAX = 320;  // safety cap so extreme altitudes stay on-screen
+const ALT_PX_PER_1000FT = 6;
+const ALT_PX_MIN = 14;   // ground-skimming aircraft still clear the surface
+const ALT_PX_MAX = 420;  // safety cap so extreme altitudes stay on-screen
+const ALT_STALK = true;  // draw a vertical line from the surface to each aircraft
 
 const REGION_VIEWS = {
   middle_east:   { center: [45,  27], zoom: 5.5, pitch: 72 },
@@ -476,13 +501,15 @@ function buildCivHeli() {
 // KEY PATTERN: model at scene origin; camera = mercatorMatrix × aircraft_transform
 // This is the official MapLibre approach — proven to work.
 const threeLayer = (() => {
-  let cam, tpl;
+  let cam, tpl, loader, stalkScene;
+  const modelCache = new Map(); // FR24 basename → { scene } | 'loading' | 'failed'
   // Pre-allocated matrices to avoid GC pressure in render loop
   const M4 = new THREE.Matrix4();
   const Lt = new THREE.Matrix4();
   const Sc = new THREE.Matrix4();
   const Rx = new THREE.Matrix4(); // model Y-up → mercator Z-up
   const Ry = new THREE.Matrix4(); // heading (rotation about model up-axis)
+  const Sz = new THREE.Matrix4(); // stalk scale
 
   function mkScene(model) {
     const sc = new THREE.Scene();
@@ -495,7 +522,23 @@ const threeLayer = (() => {
     sc.add(sun2);
     model.traverse(o => { o.frustumCulled = false; });
     sc.add(model);
-    sc.userData.model = model; // track current model so it can be swapped
+    sc.userData.model = model;
+    return sc;
+  }
+
+  // A thin 1×1×1 box spanning z=0→1 (base at origin), used as a vertical
+  // "stalk" connecting each aircraft to its ground position so altitude is
+  // unmistakable. Scaled per-aircraft: thin in x/y, tall in z.
+  function makeStalkScene() {
+    const g = new THREE.BoxGeometry(1, 1, 1);
+    g.translate(0, 0, 0.5); // base at z=0, top at z=1
+    const m = new THREE.MeshBasicMaterial({
+      color: 0x66ccff, transparent: true, opacity: 0.55,
+      depthTest: false, depthWrite: false });
+    const box = new THREE.Mesh(g, m);
+    box.frustumCulled = false;
+    const sc = new THREE.Scene();
+    sc.add(box);
     return sc;
   }
 
@@ -541,26 +584,34 @@ const threeLayer = (() => {
     return wrap;
   }
 
-  function loadModels() {
-    const loader = new GLTFLoader();
-    // Support Draco- and Meshopt-compressed .glb files (much smaller).
+  function initLoader() {
+    loader = new GLTFLoader();
     const draco = new DRACOLoader();
     draco.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.7/');
     loader.setDRACOLoader(draco);
     loader.setMeshoptDecoder(MeshoptDecoder);
-    for (const [kind, cfg] of Object.entries(MODEL_FILES)) {
-      loader.load(cfg.url, (gltf) => {
-        const scene = tpl[kind];
-        if (!scene) return;
-        const norm = normaliseModel(gltf.scene, cfg.rotDeg);
-        scene.remove(scene.userData.model); // drop the procedural placeholder
-        scene.add(norm);
-        scene.userData.model = norm;
-        map.triggerRepaint();
-      }, undefined, (err) => {
-        console.warn(`[models] ${kind}: ${cfg.url} not loaded, using built-in shape`, err?.message || err);
-      });
+  }
+
+  // Pick the scene for an aircraft: a real FR24 model matching its ICAO type
+  // code if available (loaded on demand and cached), otherwise the procedural
+  // shape for its kind. Loading is async; the procedural shape shows meanwhile.
+  function sceneFor(d) {
+    const name = modelForType(d.typeCode);
+    if (name) {
+      const entry = modelCache.get(name);
+      if (entry && entry !== 'loading' && entry !== 'failed') return entry.scene;
+      if (!entry) {
+        modelCache.set(name, 'loading');
+        loader.load(FR24_BASE + name + '.glb', (gltf) => {
+          modelCache.set(name, { scene: mkScene(normaliseModel(gltf.scene, null)) });
+          map.triggerRepaint();
+        }, undefined, (err) => {
+          modelCache.set(name, 'failed');
+          console.warn(`[models] ${name}.glb failed, using built-in shape`, err?.message || err);
+        });
+      }
     }
+    return tpl[d.kind] || null; // fallback while loading / when no match
   }
 
   return {
@@ -586,7 +637,8 @@ const threeLayer = (() => {
         civil_heli:     mkScene(buildCivHeli()),
       };
 
-      loadModels(); // swap in downloaded glTF models as they finish loading
+      initLoader();
+      stalkScene = makeStalkScene();
     },
 
     render(gl, options) {
@@ -607,18 +659,25 @@ const threeLayer = (() => {
 
       for (const [, d] of flightMap) {
         if (d.onGround) continue;
-        const sc = tpl[d.kind];
+        const sc = sceneFor(d);
         if (!sc) continue;
 
-        // Height based on real altitude data: lift the model in screen-pixels
-        // proportional to its reported altitude (kept consistent across zooms).
-        const meterMerc = maplibregl.MercatorCoordinate.fromLngLat([d.lon, d.lat], 0)
-                            .meterInMercatorCoordinateUnits();
-        const altFt  = d.altFt != null ? d.altFt : 0;
-        const altPx  = Math.min(Math.max((altFt / 1000) * ALT_PX_PER_1000FT, ALT_PX_MIN), ALT_PX_MAX);
-        const altM   = (altPx / pxPerMercator) / meterMerc;
+        // Height from real altitude data: lift the model in screen-pixels
+        // proportional to its reported altitude (consistent across zooms).
+        const ground  = maplibregl.MercatorCoordinate.fromLngLat([d.lon, d.lat], 0);
+        const meterMerc = ground.meterInMercatorCoordinateUnits();
+        const altFt   = d.altFt != null ? d.altFt : 0;
+        const altPx   = Math.min(Math.max((altFt / 1000) * ALT_PX_PER_1000FT, ALT_PX_MIN), ALT_PX_MAX);
+        const altMerc = altPx / pxPerMercator; // height in mercator units
 
-        const mc = maplibregl.MercatorCoordinate.fromLngLat([d.lon, d.lat], altM);
+        // Altitude stalk: a vertical bar from the surface up to the aircraft.
+        if (ALT_STALK && altPx > ALT_PX_MIN + 1) {
+          const wMerc = 1.6 / pxPerMercator; // ~1.6px-wide bar
+          Lt.makeTranslation(ground.x, ground.y, 0);
+          Sz.makeScale(wMerc, wMerc, altMerc); // thin box stretched to altitude
+          cam.projectionMatrix.copy(M4).multiply(Lt).multiply(Sz);
+          threeRenderer.render(stalkScene, cam);
+        }
 
         // Heading: models are built nose→+X, up→+Y. Ry(π/2 − track) points the
         // nose along the compass heading; Rx(π/2) lays the model flat so its
@@ -626,7 +685,7 @@ const threeLayer = (() => {
         // would stand on its wingtip and appear as an invisible sliver.
         const h = Math.PI / 2 - THREE.MathUtils.degToRad(d.track || 0);
 
-        Lt.makeTranslation(mc.x, mc.y, mc.z);
+        Lt.makeTranslation(ground.x, ground.y, altMerc);
         Sc.makeScale(s, -s, s); // −s on Y: mercator Y is south-positive (inverted)
         Rx.makeRotationX(Math.PI / 2);
         Ry.makeRotationY(h);
