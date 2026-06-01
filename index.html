@@ -219,6 +219,7 @@ map = new maplibregl.Map({
   zoom:   REGION_VIEWS.middle_east.zoom,
   pitch:  REGION_VIEWS.middle_east.pitch,
   antialias: true, maxPitch: 85,
+  canvasContextAttributes: {antialias: true},
 });
 map.on('load', () => {
   document.getElementById('splash').classList.add('gone');
@@ -492,7 +493,10 @@ const threeLayer = (() => {
       // MapLibre v3+ passes a CustomRenderMethodInput options object.
       // modelViewProjectionMatrix is the world→clip matrix (replaces the
       // raw Float32Array that older MapLibre versions passed directly).
-      M4.fromArray(options.modelViewProjectionMatrix);
+      // defaultProjectionData.mainMatrix is the mercator [0,1]→clip matrix,
+      // compatible with MercatorCoordinate.fromLngLat values.
+      // (modelViewProjectionMatrix uses tile-local world space, not [0,1] mercator.)
+      M4.fromArray(options.defaultProjectionData.mainMatrix);
 
       // Screen-space scale: MODEL_PX pixels per geometry unit at every zoom.
       // 512 * 2^zoom = mercator pixels per world unit (standard MapLibre tile math).
