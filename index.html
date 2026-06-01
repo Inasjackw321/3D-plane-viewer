@@ -186,6 +186,8 @@
 <script type="module">
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
+import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 
 // ── config ────────────────────────────────────────────────────
 const REFRESH_MS = 15000;
@@ -539,6 +541,11 @@ const threeLayer = (() => {
 
   function loadModels() {
     const loader = new GLTFLoader();
+    // Support Draco- and Meshopt-compressed .glb files (much smaller).
+    const draco = new DRACOLoader();
+    draco.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.7/');
+    loader.setDRACOLoader(draco);
+    loader.setMeshoptDecoder(MeshoptDecoder);
     for (const [kind, cfg] of Object.entries(MODEL_FILES)) {
       loader.load(cfg.url, (gltf) => {
         const scene = tpl[kind];
