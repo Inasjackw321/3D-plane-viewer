@@ -109,6 +109,34 @@
     .ctl-sep { height: 6px; }
     .ctl.tgl.active { background: rgba(60,200,120,.30); border-color: #3cdc78; color: #aaffcc; }
 
+    /* Legend type filter */
+    .lr[data-kind] { cursor: pointer; transition: all .15s; }
+    .lr[data-kind]:hover { background: rgba(255,136,0,.15); border-color: rgba(255,136,0,.4); }
+    .lr[data-kind].inactive { opacity: 0.22; }
+    #legend-clear { cursor: pointer; justify-content: center; }
+    #legend-clear .ll { color: #ff8844 !important; font-size: 9px; text-transform: uppercase; letter-spacing: 1px; }
+    #legend-clear:hover .ll { color: #ff5500 !important; }
+
+    /* Follow mode */
+    #follow-bar {
+      display: none; position: fixed; bottom: 50px; left: 50%; transform: translateX(-50%);
+      background: rgba(255,85,0,.3); border: 1px solid rgba(255,100,0,.7);
+      border-radius: 20px; padding: 5px 16px;
+      font-size: 11px; font-weight: 600; color: #ffcc88;
+      z-index: 10; pointer-events: all; cursor: pointer;
+      backdrop-filter: blur(10px); white-space: nowrap;
+    }
+    #follow-bar.active { display: block; }
+
+    /* Info panel extras */
+    #i-kind { font-size: 10px; color: rgba(255,255,255,.38); margin-bottom: 10px;
+      text-transform: uppercase; letter-spacing: 1px; }
+    #i-follow { width: 100%; margin-top: 10px; padding: 5px 8px;
+      background: rgba(255,85,0,.12); border: 1px solid rgba(255,136,0,.35);
+      border-radius: 6px; color: #ff9944; cursor: pointer; font-size: 11px; font-weight: 600; }
+    #i-follow:hover { background: rgba(255,85,0,.25); }
+    #i-follow.following { background: rgba(255,85,0,.35); border-color: #ff5500; color: #fff; }
+
     #status-bar {
       position: fixed; bottom: 12px; left: 50%; transform: translateX(-50%);
       display: flex; align-items: center; gap: 7px;
@@ -144,16 +172,23 @@
   <div class="hdiv"></div>
   <div class="stat"><div class="stat-v mv" id="hdr-mil">—</div><div class="stat-l">Aircraft</div></div>
   <div class="hdiv"></div>
+  <div class="stat"><div class="stat-v" id="hdr-ftr" style="color:#44ff88">—</div><div class="stat-l">Fighters</div></div>
+  <div class="hdiv"></div>
+  <div class="stat"><div class="stat-v" id="hdr-tnk" style="color:#55bbff">—</div><div class="stat-l">Tankers</div></div>
+  <div class="hdiv"></div>
+  <div class="stat"><div class="stat-v" id="hdr-crg" style="color:#bb99ff">—</div><div class="stat-l">Cargo</div></div>
+  <div class="hdiv"></div>
   <div class="stat"><div class="stat-v" id="hdr-time">—</div><div class="stat-l">Updated</div></div>
 </div>
 
 <div id="legend">
-  <div class="lr"><div class="ld" style="background:#22ff66"></div><div class="ll">Fighter</div></div>
-  <div class="lr"><div class="ld" style="background:#55aaff"></div><div class="ll">Tanker</div></div>
-  <div class="lr"><div class="ld" style="background:#ffff44"></div><div class="ll">AWACS</div></div>
-  <div class="lr"><div class="ld" style="background:#aa88ff"></div><div class="ll">Cargo</div></div>
-  <div class="lr"><div class="ld" style="background:#44ffcc"></div><div class="ll">Atk Heli</div></div>
-  <div class="lr"><div class="ld" style="background:#44ffaa"></div><div class="ll">Transport Heli</div></div>
+  <div class="lr" data-kind="fighter"><div class="ld" style="background:#22ff66"></div><div class="ll">Fighter / Trainer</div></div>
+  <div class="lr" data-kind="tanker"><div class="ld" style="background:#55aaff"></div><div class="ll">Tanker</div></div>
+  <div class="lr" data-kind="awacs"><div class="ld" style="background:#ffff44"></div><div class="ll">AWACS / ISR</div></div>
+  <div class="lr" data-kind="cargo"><div class="ld" style="background:#aa88ff"></div><div class="ll">Cargo / Airlift</div></div>
+  <div class="lr" data-kind="attack_heli"><div class="ld" style="background:#44ffcc"></div><div class="ll">Attack Heli</div></div>
+  <div class="lr" data-kind="transport_heli"><div class="ld" style="background:#44ffaa"></div><div class="ll">Transport Heli</div></div>
+  <div class="lr" id="legend-clear" style="display:none"><div class="ll">✕ Clear filter</div></div>
 </div>
 
 <div id="regions">
@@ -168,13 +203,16 @@
   <button id="info-close">×</button>
   <div class="i-cs"  id="i-cs">—</div>
   <div class="i-sub" id="i-sub">—</div>
+  <div id="i-kind">—</div>
   <div class="i-grid">
     <div class="i-cell"><label>Altitude</label><span id="i-alt">—</span></div>
     <div class="i-cell"><label>Speed</label>   <span id="i-spd">—</span></div>
     <div class="i-cell"><label>Heading</label> <span id="i-hdg">—</span></div>
-    <div class="i-cell"><label>Type</label>    <span id="i-typ">—</span></div>
+    <div class="i-cell"><label>Type code</label><span id="i-typ">—</span></div>
   </div>
+  <button id="i-follow">📍 Follow aircraft</button>
 </div>
+<div id="follow-bar">📍 Following <span id="follow-label">—</span> · click to stop</div>
 
 <div id="controls">
   <button class="ctl" id="btn-tup"  title="Tilt up">▲</button>
@@ -276,6 +314,10 @@ function savePrefs() {
   localStorage.setItem('flt-prefs', JSON.stringify({
     labels: SHOW_LABELS, trails: SHOW_TRAILS, stalks: SHOW_STALKS, detail: LABEL_DETAIL }));
 }
+
+// ── type filter & follow ───────────────────────────────────────
+const FILTER_KINDS = new Set(); // empty = show all; non-empty = show only these kinds
+let followHex = null, followInterval = null, panelHex = null;
 
 // ── MapLibre ──────────────────────────────────────────────────
 map = new maplibregl.Map({
@@ -826,6 +868,7 @@ const threeLayer = (() => {
         cam.projectionMatrix.copy(Iden);
         for (const [hex, d] of flightMap) {
           if (d.onGround) continue;
+          if (FILTER_KINDS.size > 0 && !FILTER_KINDS.has(d.kind)) continue;
           const trail = trailHistory.get(hex);
           if (!trail || trail.length < 2) continue;
           const n = trail.length;
@@ -869,6 +912,7 @@ const threeLayer = (() => {
       const draw = []; // collected visible aircraft, sorted far → near
       for (const [, d] of flightMap) {
         if (d.onGround) continue;
+        if (FILTER_KINDS.size > 0 && !FILTER_KINDS.has(d.kind)) continue;
         const sc = sceneFor(d);
         if (!sc) continue;
         const ground = maplibregl.MercatorCoordinate.fromLngLat([d.lon, d.lat], 0);
@@ -943,24 +987,44 @@ const threeLayer = (() => {
 })();
 
 // ── classify ─────────────────────────────────────────────────
+// Checked top-to-bottom; first match wins.
+// Type codes are already ICAO alphanumeric (no hyphens in practice), but
+// we strip non-alnum just in case the feed sends e.g. "KC-135".
 function classify(d) {
-  const t  = (d.typeCode || '').toUpperCase();
+  const t  = (d.typeCode || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
   const cs = (d.callsign || '').toUpperCase();
   const gs = d.gs || 0, alt = d.altFt || 0;
 
   if (d.mil) {
-    if (/^(E3T|E3CF|E3D|E7W|B707|B70|E2C|E2D|P3C|P8|RC135|WJET)/.test(t)) return 'awacs';
-    if (/SNTRY|DISCO|ROOK|MAGIC|COBRA\d|SWORD/.test(cs))                    return 'awacs';
-    if (/^(KC13|KC10|KC46|K35R|A332|A342|B762|B764|IL78|VC10|DC10)/.test(t)) return 'tanker';
-    if (/^(RCH|REACH|MAKO|IRON|SHELL|OILER)/.test(cs))                       return 'tanker';
-    if (/^(C130|C17|C5|C27|C295|A400|IL76|AN12|AN26|AN70|C141|C160)/.test(t)) return 'cargo';
-    if (/^(GLOBE|ATLAS|ASCOT|JAKE|ROCKY)/.test(cs) && gs < 420)              return 'cargo';
-    if (/^(AH64|AH1|EC665|TIGR|A129|LYNX|SA342)/.test(t))                   return 'attack_heli';
-    if (/^(CH47|CH53|S61|S70|UH60|UH1|HH60|NH90|EC725|AS33|MI8|MI17|V22)/.test(t)) return 'transport_heli';
-    if (gs < 80) return 'transport_heli';
-    return 'fighter';
+    // ── AWACS / ISR / Command ──────────────────────────────────────
+    // Rotodome, special antenna or electronic mission. Check before tankers
+    // because E-3/E-6 type codes can look airliner-like.
+    if (/^(E3|E3T|E3CF|E3D|E3S|E7|E7W|E2|E2C|E2D|E4|E6|E8|P3|P3C|P8|RC135|WC135|TC135|OC135|VC25|B70|WJET)/.test(t)) return 'awacs';
+    if (/^(SNTRY|DISCO|ROOK|MAGIC|COBRA[0-9]|SWORD|JSTAR|OMEN|SPOOK|TORCH|HAWKEYE)/.test(cs)) return 'awacs';
+
+    // ── Aerial tankers ─────────────────────────────────────────────
+    // Check before cargo: KC-130 is a tanker variant of the C-130 airframe, so
+    // "KC13" must match here before "C130" hits the cargo branch below.
+    if (/^(KC46|KC10|KC13|KC130|K35R|K35E|K135|KE3|IL78|VC10|KDC10|DC10T|MRTT|FSTA)/.test(t)) return 'tanker';
+    if (/^(A332|A333|A342|A310)/.test(t)) return 'tanker'; // A330/A310 MRTT variants
+    if (/^(B762|B764|DC10)/.test(t))       return 'tanker'; // 767-based KC-46 / KC-10 variants
+    if (/^(ARCO|TEXACO|BASHER|VAPOR|PETROL|DRAG|KETCH|MAKO|IRON|SHELL|OILER|FRESH|BLUE[0-9]|TOWLINE|SCATHE|PACK[0-9]|GRAY)/.test(cs)) return 'tanker';
+
+    // ── Cargo / airlift ────────────────────────────────────────────
+    if (/^(C17|C130|C5|C27|C295|A400|IL76|AN12|AN22|AN26|AN70|C141|C160|C2A|C9A|C130J|HC130|MC130|LC130|C5A|C5B|C5M|C40|C32|C37)/.test(t)) return 'cargo';
+    // REACH / RCH = Air Mobility Command airlift (NOT tanker — common misclassification)
+    if (/^(REACH|RCH|GLOBE|ATLAS|ASCOT|JAKE|ROCKY|RAIDR|COMET|ANVIL)/.test(cs) && gs < 560) return 'cargo';
+
+    // ── Helicopters ────────────────────────────────────────────────
+    if (/^(AH64|AH1|EC665|TIGR|A129|LYNX|SA342|BO105|MD530|OH58|UH72)/.test(t)) return 'attack_heli';
+    if (/^(CH47|CH53|S61|S70|UH60|UH1|HH60|NH90|EC725|AS33|MI8|MI17|V22|MH60|SH60|MH53|HH53|CH46|EH101|AW101|AW139|AS532)/.test(t)) return 'transport_heli';
+    if (gs < 80 && alt < 15000) return 'transport_heli';
+
+    return 'fighter'; // fast-movers, trainers, recon jets, UAVs
   }
-  if (/^(R[0-9]|EC[0-9]|AW|H[0-6]|S76|B06|BK1|MD9)/.test(t)) return 'civil_heli';
+
+  // ── Civil ──────────────────────────────────────────────────────
+  if (/^(R[0-9]|EC[0-9]|AW[0-9]|H[0-6]|S76|B06|BK1|MD9|AS3|AS5|EC13|R44|R66|B407)/.test(t)) return 'civil_heli';
   if (gs < 80) return 'civil_heli';
   if (gs < 300 && alt < 20000) return 'civil_prop';
   return 'civil_jet';
@@ -978,6 +1042,7 @@ function refreshLabels() {
 
   for (const [hex, d] of flightMap) {
     if (d.onGround) continue;
+    if (FILTER_KINDS.size > 0 && !FILTER_KINDS.has(d.kind)) continue;
     const px = map.project([d.lon, d.lat]);
     if (px.x < -30 || px.y < -30 || px.x > W+30 || px.y > H+30) continue;
     vis.add(hex);
@@ -1019,12 +1084,19 @@ map.getCanvas().addEventListener('click', e => {
   if (best) showPanel(best);
 });
 
+const KIND_LABEL = {
+  fighter: 'Fighter / Trainer', tanker: 'Aerial Tanker', awacs: 'AWACS / ISR',
+  cargo: 'Cargo / Airlift', attack_heli: 'Attack Helicopter', transport_heli: 'Transport Helicopter',
+  civil_jet: 'Civil Jet', civil_prop: 'Civil Prop', civil_heli: 'Civil Helicopter',
+};
 function showPanel(d) {
+  panelHex = d.hex;
   document.getElementById('i-cs').innerHTML =
     (d.callsign || d.hex?.toUpperCase() || '—') +
     (d.mil ? '<span class="i-badge">MILITARY</span>' : '');
   document.getElementById('i-sub').textContent = d.reg
     ? `Reg: ${d.reg}` : (d.hex?.toUpperCase() || '—');
+  document.getElementById('i-kind').textContent = KIND_LABEL[d.kind] || d.kind || '—';
   document.getElementById('i-alt').textContent =
     d.altFt != null ? `${Math.round(d.altFt).toLocaleString()} ft` : 'N/A';
   document.getElementById('i-spd').textContent =
@@ -1032,6 +1104,9 @@ function showPanel(d) {
   document.getElementById('i-hdg').textContent =
     d.track != null ? `${Math.round(d.track)}°` : 'N/A';
   document.getElementById('i-typ').textContent = d.typeCode || '—';
+  const followBtn = document.getElementById('i-follow');
+  followBtn.textContent = followHex === d.hex ? '🔓 Unfollow aircraft' : '📍 Follow aircraft';
+  followBtn.classList.toggle('following', followHex === d.hex);
   const p = document.getElementById('info-panel');
   p.classList.toggle('mp', !!d.mil);
   document.querySelectorAll('.i-cell span').forEach(s => s.classList.toggle('mv', !!d.mil));
@@ -1106,9 +1181,16 @@ async function fetchAndUpdate() {
       if (!newMap.has(hex)) trailHistory.delete(hex);
     }
 
-    const mil = [...newMap.values()].filter(d => !d.onGround).length;
-    document.getElementById('hdr-mil').textContent   = mil.toLocaleString();
-    document.getElementById('hdr-time').textContent  =
+    const airborne = [...newMap.values()].filter(d => !d.onGround);
+    const mil = airborne.length;
+    const ftr = airborne.filter(d => d.kind === 'fighter').length;
+    const tnk = airborne.filter(d => d.kind === 'tanker').length;
+    const crg = airborne.filter(d => d.kind === 'cargo').length;
+    document.getElementById('hdr-mil').textContent  = mil.toLocaleString();
+    document.getElementById('hdr-ftr').textContent  = ftr;
+    document.getElementById('hdr-tnk').textContent  = tnk;
+    document.getElementById('hdr-crg').textContent  = crg;
+    document.getElementById('hdr-time').textContent =
       new Date().toLocaleTimeString([], { hour:'2-digit', minute:'2-digit', second:'2-digit' });
     setStatus('', `${mil} military aircraft · refreshes every 15 s`);
   } catch(e) {
@@ -1158,6 +1240,56 @@ document.getElementById('btn-stalks').addEventListener('click', toggleStalks);
 document.getElementById('btn-detail').addEventListener('click', toggleDetail);
 syncToggleUI();
 
+// ── legend type filter ─────────────────────────────────────────
+document.querySelectorAll('.lr[data-kind]').forEach(el => {
+  el.addEventListener('click', () => {
+    const k = el.dataset.kind;
+    if (FILTER_KINDS.has(k)) FILTER_KINDS.delete(k);
+    else FILTER_KINDS.add(k);
+    const hasFilter = FILTER_KINDS.size > 0;
+    document.querySelectorAll('.lr[data-kind]').forEach(e =>
+      e.classList.toggle('inactive', hasFilter && !FILTER_KINDS.has(e.dataset.kind)));
+    document.getElementById('legend-clear').style.display = hasFilter ? '' : 'none';
+    map.triggerRepaint();
+    refreshLabels();
+  });
+});
+document.getElementById('legend-clear').addEventListener('click', () => {
+  FILTER_KINDS.clear();
+  document.querySelectorAll('.lr[data-kind]').forEach(e => e.classList.remove('inactive'));
+  document.getElementById('legend-clear').style.display = 'none';
+  map.triggerRepaint();
+  refreshLabels();
+});
+
+// ── follow mode ────────────────────────────────────────────────
+function startFollow(hex) {
+  followHex = hex;
+  const label = flightMap.get(hex)?.callsign || hex.toUpperCase();
+  document.getElementById('follow-label').textContent = label;
+  document.getElementById('follow-bar').classList.add('active');
+  if (followInterval) clearInterval(followInterval);
+  followInterval = setInterval(() => {
+    const fd = flightMap.get(followHex);
+    if (!fd) { stopFollow(); return; }
+    map.panTo([fd.lon, fd.lat], { duration: 2000, easing: t => t * (2 - t) });
+  }, 3000);
+}
+function stopFollow() {
+  followHex = null;
+  if (followInterval) { clearInterval(followInterval); followInterval = null; }
+  document.getElementById('follow-bar').classList.remove('active');
+  // Refresh panel button if open
+  if (panelHex && flightMap.has(panelHex)) showPanel(flightMap.get(panelHex));
+}
+document.getElementById('follow-bar').addEventListener('click', stopFollow);
+document.getElementById('i-follow').addEventListener('click', () => {
+  if (!panelHex) return;
+  if (followHex === panelHex) stopFollow();
+  else startFollow(panelHex);
+  if (flightMap.has(panelHex)) showPanel(flightMap.get(panelHex));
+});
+
 // ── keyboard shortcuts ─────────────────────────────────────────
 window.addEventListener('keydown', e => {
   if (e.target.tagName === 'INPUT' || e.metaKey || e.ctrlKey) return;
@@ -1166,7 +1298,10 @@ window.addEventListener('keydown', e => {
     case 't': toggleTrails(); break;
     case 's': toggleStalks(); break;
     case 'd': toggleDetail(); break;
-    case 'escape': document.getElementById('info-panel').classList.remove('open'); break;
+    case 'escape':
+      document.getElementById('info-panel').classList.remove('open');
+      stopFollow();
+      break;
     case '+': case '=': map.easeTo({ zoom: map.getZoom()+0.8, duration: 300 }); break;
     case '-': map.easeTo({ zoom: map.getZoom()-0.8, duration: 300 }); break;
   }
