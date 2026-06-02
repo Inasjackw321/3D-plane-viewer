@@ -79,7 +79,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
 
         try:
             seen = {}
-            tasks = [("civil", lat, lon) for lat, lon in points]
+            n_ok, n_fail, last_err = 0, 0, None
 
             with ThreadPoolExecutor(max_workers=12) as ex:
                 civil_futs = {ex.submit(fetch_point, lat, lon): None for lat, lon in points}
@@ -88,7 +88,9 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 for fut in as_completed(list(civil_futs) + [mil_fut]):
                     is_mil = (fut is mil_fut)
                     try:
-                        for a in fut.result():
+                        result = fut.result()
+                        n_ok += 1
+                        for a in result:
                             key = a.get("hex") or a.get("icao24")
                             if not key:
                                 continue
@@ -106,10 +108,18 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                             # not block the mil endpoint from tagging it later.
                             if key not in seen or (is_mil and not seen[key].get("mil")):
                                 seen[key] = a
-                    except Exception:
-                        pass
+                    except Exception as fe:
+                        n_fail += 1
+                        last_err = fe
 
-            out = json.dumps({"aircraft": list(seen.values())}).encode()
+            payload = {"aircraft": list(seen.values()), "sources_ok": n_ok, "sources_failed": n_fail}
+            # If every upstream fetch failed, the data source is unreachable —
+            # surface that instead of silently returning an empty list.
+            if n_ok == 0 and n_fail > 0:
+                code = getattr(last_err, "code", None)
+                detail = f"HTTP {code}" if code else type(last_err).__name__
+                payload["error"] = f"Flight data source unreachable ({detail})"
+            out = json.dumps(payload).encode()
         except Exception as e:
             out = json.dumps({"error": str(e), "aircraft": []}).encode()
 
