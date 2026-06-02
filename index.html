@@ -1201,6 +1201,12 @@ async function fetchAndUpdate() {
     const r = await fetch(`/api/flights?region=${currentRegion}`,
                           { signal: AbortSignal.timeout(35000) });
     const j = await r.json();
+    // If the proxy could not reach any upstream data source, show why rather
+    // than silently rendering an empty sky.
+    if (j.error && (!j.aircraft || j.aircraft.length === 0)) {
+      setStatus('err', j.error + ' — retrying in 15 s');
+      return;
+    }
     const list = j.aircraft ?? j.ac ?? [];
 
     const newMap = new Map();
