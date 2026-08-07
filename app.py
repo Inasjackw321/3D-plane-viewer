@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-"""Live 3D Flight Tracker — proxies airplanes.live (civil + military)."""
+"""Flight Tracker 3D — Python app that proxies airplanes.live (civil + military).
+
+Run:  python3 app.py [--port 3000] [--host localhost] [--no-browser]
+
+Pure standard library — no pip install required.
+"""
 import http.server
 import socketserver
 import threading
@@ -9,9 +14,19 @@ import urllib.parse
 import json
 import os
 import time
+import argparse
 
 PORT = 3000
 HOST = "localhost"
+
+# ── server-side response cache ─────────────────────────────────────
+# Assembled region results are cached briefly so multiple browser refreshes (or
+# several viewers) don't multiply upstream calls. The last successful result per
+# region is also retained and served (flagged stale) if a later fetch fails, so
+# a transient upstream hiccup never blanks the map.
+CACHE_TTL   = 8.0   # seconds a fresh assembled result is reused
+_cache      = {}    # region -> { "t": epoch, "payload": dict }
+_cache_lock = threading.Lock()
 
 API_BASE = "https://api.airplanes.live/v2"
 RADIUS   = 250  # nautical miles (API maximum)
@@ -94,6 +109,12 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         points = REGION_POINTS.get(region, REGION_POINTS["global"])
         bbox   = REGION_BBOX.get(region)
 
+        # Serve a fresh cached result without touching upstream.
+        with _cache_lock:
+            hit = _cache.get(region)
+        if hit and (time.monotonic() - hit["t"]) < CACHE_TTL:
+            return self._send_json(dict(hit["payload"], cached=True))
+
         try:
             seen = {}
             n_ok, n_fail, last_err = 0, 0, None
@@ -132,18 +153,33 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                         seen[key] = a
 
             payload = {"aircraft": list(seen.values()), "sources_ok": n_ok, "sources_failed": n_fail}
-            # If every upstream fetch failed, the data source is unreachable —
-            # surface that instead of silently returning an empty list.
+            # If every upstream fetch failed, the data source is unreachable.
+            # Prefer serving the last good result (flagged stale) over a blank map.
             if n_ok == 0 and n_fail > 0:
                 code = getattr(last_err, "code", None)
                 detail = f"HTTP {code}" if code else type(last_err).__name__
-                payload["error"] = f"Flight data source unreachable ({detail})"
-            out = json.dumps(payload).encode()
-        except Exception as e:
-            out = json.dumps({"error": str(e), "aircraft": []}).encode()
+                with _cache_lock:
+                    prev = _cache.get(region)
+                if prev and prev["payload"].get("aircraft"):
+                    return self._send_json(dict(
+                        prev["payload"], stale=True,
+                        error=f"Live source unreachable ({detail}) — showing last data"))
+                return self._send_json({
+                    "aircraft": [],
+                    "error": f"Flight data source unreachable ({detail})"})
 
+            # Success — cache and serve.
+            with _cache_lock:
+                _cache[region] = {"t": time.monotonic(), "payload": payload}
+            return self._send_json(payload)
+        except Exception as e:
+            return self._send_json({"error": str(e), "aircraft": []})
+
+    def _send_json(self, obj):
+        out = json.dumps(obj).encode()
         self.send_response(200)
         self.send_header("Content-Type",  "application/json")
+        self.send_header("Content-Length", str(len(out)))
         self.send_header("Access-Control-Allow-Origin", "*")
         self.end_headers()
         self.wfile.write(out)
@@ -157,15 +193,27 @@ class ThreadedServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
     allow_reuse_address = True
 
 
-os.chdir(os.path.dirname(os.path.abspath(__file__)))
+def main():
+    parser = argparse.ArgumentParser(description="Flight Tracker 3D — local server")
+    parser.add_argument("--port", type=int, default=PORT, help="port to listen on (default 3000)")
+    parser.add_argument("--host", default=HOST, help="host/interface to bind (default localhost)")
+    parser.add_argument("--no-browser", action="store_true", help="do not auto-open the browser")
+    args = parser.parse_args()
 
-with ThreadedServer((HOST, PORT), Handler) as httpd:
-    url = f"http://{HOST}:{PORT}"
-    print(f"\n  ✈  Live 3D Flight Tracker")
-    print(f"  →  {url}")
-    print(f"  Ctrl+C to stop\n")
-    threading.Timer(0.6, lambda: webbrowser.open(url)).start()
-    try:
-        httpd.serve_forever()
-    except KeyboardInterrupt:
-        print("\n  Server stopped.")
+    os.chdir(os.path.dirname(os.path.abspath(__file__)))
+
+    with ThreadedServer((args.host, args.port), Handler) as httpd:
+        url = f"http://{args.host}:{args.port}"
+        print(f"\n  ✈  Flight Tracker 3D")
+        print(f"  →  {url}")
+        print(f"  Ctrl+C to stop\n")
+        if not args.no_browser:
+            threading.Timer(0.6, lambda: webbrowser.open(url)).start()
+        try:
+            httpd.serve_forever()
+        except KeyboardInterrupt:
+            print("\n  Server stopped.")
+
+
+if __name__ == "__main__":
+    main()

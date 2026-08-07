@@ -110,6 +110,58 @@
     .ctl-sep { height: 6px; }
     .ctl.tgl.active { background: rgba(60,200,120,.30); border-color: #3cdc78; color: #aaffcc; }
 
+    /* Time-of-day slider */
+    #sun-control {
+      position: fixed; right: 62px; bottom: 50px; z-index: 10; pointer-events: all;
+      display: flex; align-items: center; gap: 8px;
+      background: rgba(4,8,20,.82); border: 1px solid rgba(80,160,255,.22);
+      border-radius: 9px; padding: 7px 12px; backdrop-filter: blur(10px);
+    }
+    #sun-control .sun-ico { font-size: 14px; }
+    #sun-control input[type=range] { width: 120px; accent-color: #ffb020; cursor: pointer; }
+    #sun-val { font-size: 11px; font-weight: 700; color: #ffcc66; min-width: 40px; }
+
+    /* Search box */
+    #search-box {
+      position: fixed; top: 14px; left: 14px; z-index: 11; width: 230px; pointer-events: all;
+    }
+    #search-input {
+      width: 100%; background: rgba(4,8,20,.9); border: 1px solid rgba(80,160,255,.28);
+      border-radius: 10px; padding: 8px 12px; color: #fff; font-size: 12px;
+      backdrop-filter: blur(14px); outline: none;
+    }
+    #search-input:focus { border-color: #ff8800; }
+    #search-results {
+      margin-top: 5px; background: rgba(4,8,20,.94); border-radius: 10px;
+      overflow: hidden; display: none; border: 1px solid rgba(80,160,255,.2);
+    }
+    #search-results.open { display: block; }
+    .sr-row { padding: 7px 12px; font-size: 11px; color: rgba(255,255,255,.7);
+      cursor: pointer; border-bottom: 1px solid rgba(255,255,255,.05); }
+    .sr-row:hover { background: rgba(255,136,0,.18); color: #fff; }
+    .sr-row b { color: #ffaa44; }
+    .sr-row small { color: rgba(255,255,255,.4); }
+
+    /* Aircraft list panel */
+    #ac-list {
+      position: fixed; top: 72px; left: 14px; width: 210px; max-height: 60vh; z-index: 12;
+      background: rgba(4,8,20,.9); border: 1px solid rgba(80,160,255,.22);
+      border-radius: 12px; backdrop-filter: blur(14px); display: none;
+      flex-direction: column; overflow: hidden; pointer-events: all;
+    }
+    #ac-list.open { display: flex; }
+    #ac-list-head { font-size: 11px; font-weight: 700; color: #fff; text-transform: uppercase;
+      letter-spacing: 1px; padding: 9px 12px; border-bottom: 1px solid rgba(255,255,255,.08); }
+    #ac-list-count { color: #44ff88; margin-left: 4px; }
+    #ac-list-body { overflow-y: auto; }
+    .al-row { display: flex; align-items: center; gap: 8px; padding: 6px 12px;
+      cursor: pointer; border-bottom: 1px solid rgba(255,255,255,.04); }
+    .al-row:hover { background: rgba(255,136,0,.16); }
+    .al-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+    .al-cs { font-size: 11px; font-weight: 700; color: #fff; flex: 1;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .al-alt { font-size: 9px; color: rgba(255,255,255,.45); font-variant-numeric: tabular-nums; }
+
     #legend-stats { display: flex; gap: 10px; padding: 5px 10px 3px;
       border-top: 1px solid rgba(255,255,255,.07); margin-top: 2px; }
     #legend-stats span { font-size: 11px; font-weight: 800; color: rgba(255,255,255,.55); }
@@ -234,7 +286,26 @@
   <button class="ctl tgl" id="btn-predict" title="Toggle prediction lines (P)">➤</button>
   <button class="ctl tgl" id="btn-detail"  title="Toggle tag detail (D)">ℹ</button>
   <div class="ctl-sep"></div>
+  <button class="ctl tgl" id="btn-anim"    title="Toggle rotor animation (A)">✷</button>
+  <button class="ctl tgl" id="btn-lights"  title="Toggle nav lights (G)">✦</button>
+  <button class="ctl tgl" id="btn-list"    title="Toggle aircraft list (F)">☰</button>
   <button class="ctl tgl" id="btn-night"   title="Toggle night mode (N)">🌙</button>
+</div>
+
+<div id="sun-control" title="Time of day">
+  <span class="sun-ico">☀</span>
+  <input type="range" id="sun-slider" min="0" max="24" step="1" value="14">
+  <span id="sun-val">14:00</span>
+</div>
+
+<div id="search-box">
+  <input type="text" id="search-input" placeholder="🔍 Search callsign / type / hex…" autocomplete="off">
+  <div id="search-results"></div>
+</div>
+
+<div id="ac-list">
+  <div id="ac-list-head">Aircraft <span id="ac-list-count">0</span></div>
+  <div id="ac-list-body"></div>
 </div>
 
 <div id="status-bar">
@@ -247,8 +318,9 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 
-// ── config ────────────────────────────────────────────────────
+// ── config ─────────────────────────────────────────
 const REFRESH_MS = 15000;
 
 // Real aircraft models: Flightradar24 open models (GPL-2) converted from
@@ -314,13 +386,13 @@ const REGION_VIEWS = {
   global:        { center: [20,  25], zoom: 2.5, pitch: 55 },
 };
 
-// ── state ─────────────────────────────────────────────────────
+// ── state ────────────────────────────────────
 let currentRegion = 'middle_east';
 let flightMap     = new Map(); // hex → {lat,lon,displayAltM,track,kind,...}
 const trailHistory = new Map(); // hex → [{x,y,alt}] mercator coords + altitude
 let threeRenderer, map;
 
-// ── view toggles (persisted in localStorage) ──────────────────
+// ── view toggles (persisted in localStorage) ──────────────
 const prefs = JSON.parse(localStorage.getItem('flt-prefs') || '{}');
 let SHOW_LABELS  = prefs.labels   !== false;
 let SHOW_TRAILS  = prefs.trails   !== false;
@@ -328,17 +400,21 @@ let SHOW_STALKS  = prefs.stalks   !== false;
 let LABEL_DETAIL = prefs.detail   !== false;
 let SHOW_PREDICT = prefs.predict  !== false; // heading prediction lines
 let NIGHT_MODE   = prefs.night    === true;  // dark map tiles
+let ANIMATE      = prefs.animate  !== false; // spin rotors / props
+let SHOW_LIGHTS  = prefs.lights   !== false; // navigation / strobe lights
+let SUN_HOUR     = prefs.sunHour != null ? prefs.sunHour : 14; // 0–24 time of day
 function savePrefs() {
   localStorage.setItem('flt-prefs', JSON.stringify({
     labels: SHOW_LABELS, trails: SHOW_TRAILS, stalks: SHOW_STALKS,
-    detail: LABEL_DETAIL, predict: SHOW_PREDICT, night: NIGHT_MODE }));
+    detail: LABEL_DETAIL, predict: SHOW_PREDICT, night: NIGHT_MODE,
+    animate: ANIMATE, lights: SHOW_LIGHTS, sunHour: SUN_HOUR }));
 }
 
-// ── type filter & follow ───────────────────────────────────────
+// ── type filter & follow ──────────────────────────
 const FILTER_KINDS = new Set(); // empty = show all; non-empty = show only these kinds
 let followHex = null, followInterval = null, panelHex = null;
 
-// ── MapLibre ──────────────────────────────────────────────────
+// ── MapLibre ────────────────────────────────
 map = new maplibregl.Map({
   container: 'map',
   style: {
@@ -364,27 +440,64 @@ map.on('load', () => {
   startFetching();
 });
 
-// ── materials ─────────────────────────────────────────────────
-// PBR flat-shaded materials: flatShading=true makes every polygon face catch
-// light at its own angle, giving a distinctive low-poly game aesthetic even
-// with simple geometry.
-function mat(color, emissive, ei = 0.35) {
-  return new THREE.MeshStandardMaterial({
+// ── materials ───────────────────────────────
+// A shared image-based-lighting environment (generated in onAdd once the
+// renderer exists) gives every metallic surface real reflections, which is the
+// single biggest jump in perceived quality over flat-lit geometry.
+let ENV_MAP = null;
+
+// Primary airframe material: metallic, glossy, faceted (flatShading) so each
+// polygon catches the environment at its own angle — reads as brushed metal.
+function mat(color, emissive, ei = 0.30) {
+  const m = new THREE.MeshStandardMaterial({
     color, emissive, emissiveIntensity: ei,
-    metalness: 0.3, roughness: 0.5,
+    metalness: 0.85, roughness: 0.34,
     flatShading: true, side: THREE.DoubleSide });
+  m.envMapIntensity = 1.15;
+  return m;
+}
+// Dark glossy cockpit glass.
+function glassMat(tint = 0x0a1420) {
+  const m = new THREE.MeshStandardMaterial({
+    color: tint, emissive: 0x000000,
+    metalness: 1.0, roughness: 0.08, side: THREE.DoubleSide });
+  m.envMapIntensity = 1.6;
+  return m;
+}
+// Hot glowing surface (engine exhaust / afterburner).
+function glowMat(color) {
+  return new THREE.MeshStandardMaterial({
+    color: 0x110800, emissive: color, emissiveIntensity: 1.4,
+    metalness: 0.2, roughness: 0.6, side: THREE.DoubleSide });
+}
+// Navigation-light emitter (colour toggled per-frame for the strobe effect).
+function lightMat(color) {
+  return new THREE.MeshBasicMaterial({ color, toneMapped: false });
 }
 const M = {
-  fighter:  mat(0x44ff88, 0x0d4020),
-  tanker:   mat(0x55bbff, 0x0d2a55),
-  awacs:    mat(0xffdd44, 0x55380a),
-  awacsDsk: mat(0xffee44, 0x6a4800, 0.7),
-  cargo:    mat(0xbb99ff, 0x2a1f55),
-  atkHeli:  mat(0x44ffcc, 0x0a3d2e),
-  trnHeli:  mat(0x44ffaa, 0x0a3a1f),
-  civJet:   mat(0xff9955, 0x4a2606),
-  civProp:  mat(0xffbb44, 0x4a2e06),
-  civHeli:  mat(0xff8844, 0x4a1f06),
+  fighter:  mat(0x9fb0bf, 0x0a1a12),   // gunmetal
+  tanker:   mat(0xd8dee6, 0x101820),   // light grey
+  awacs:    mat(0xc9d2da, 0x14100a),   // ISR grey
+  awacsDsk: mat(0xe8eef4, 0x101418, 0.15),
+  cargo:    mat(0x8a929c, 0x0e0f14),   // dark tactical grey
+  atkHeli:  mat(0x4b5548, 0x0a120c),   // olive drab
+  trnHeli:  mat(0x5a6350, 0x0a120c),   // army green
+  civJet:   mat(0xdfe6ee, 0x101418),
+  civProp:  mat(0xe6ddc4, 0x14120a),
+  civHeli:  mat(0xccd2da, 0x101418),
+  glass:    glassMat(0x0a1622),
+  glowRed:  glowMat(0xff5522),
+  rotor:    (() => { const m = mat(0x1c1f22, 0x000000, 0); m.metalness = 0.5; m.roughness = 0.7; return m; })(),
+  navRed:   lightMat(0xff2a2a),
+  navGreen: lightMat(0x2aff4a),
+  navWhite: lightMat(0xffffff),
+};
+// Per-kind accent colour used for wingtip/tail identification stripes so each
+// type is distinguishable at a glance even though airframes are realistic grey.
+const KIND_ACCENT = {
+  fighter: 0x33ff88, tanker: 0x44aaff, awacs: 0xffdd33, cargo: 0xbb88ff,
+  attack_heli: 0x33ffcc, transport_heli: 0x66ff88,
+  civil_jet: 0xff9955, civil_prop: 0xffcc44, civil_heli: 0xff8855,
 };
 // RGB trail colours per aircraft kind (0–1 range, used as vertex colours)
 const KIND_TRAIL = {
@@ -399,7 +512,7 @@ const KIND_TRAIL = {
   civil_heli:     [1.00, 0.53, 0.27],
 };
 
-// ── geometry helpers ──────────────────────────────────────────
+// ── geometry helpers ───────────────────────────
 // Fuselage convention: nose → +X, wings span ±Z, up → +Y
 // cylX  = cylinder lying along X axis
 // coneX = cone with tip at +X  (nose)
@@ -469,225 +582,333 @@ function addFin(g, m, pts, thick, px = 0, py = 0, pz = 0, cant = 0) {
   g.add(mesh);
 }
 
-// A small low-poly bubble canopy (squashed octahedron-ish sphere) sitting on
-// top of the fuselage — reads instantly as "cockpit".
-function canopy(g, m, px, len, wid, ht, py = 0.45) {
-  addM(g, new THREE.SphereGeometry(1, 8, 5), m, px, py, 0, 0, 0, 0, len, ht, wid);
+// A small glossy bubble canopy (squashed sphere) sitting on top of the
+// fuselage — dark glass reads instantly as "cockpit".
+function canopy(g, _m, px, len, wid, ht, py = 0.45) {
+  addM(g, new THREE.SphereGeometry(1, 10, 6), M.glass, px, py, 0, 0, 0, 0, len, ht, wid);
 }
 
-// ── Fighter (F-22 / Typhoon style) ───────────────────────────
-function buildFighter() {
-  const g = grp(), m = M.fighter;
-  addM(g, cylX(0.72, 0.55, 11, 8), m);                         // rounder fuselage
-  addM(g, coneX(0.50, 5.5, 8), m, 8.0);                        // needle nose
-  addM(g, coneMX(0.72, 2.2, 8), m, -6.8);                      // exhaust bell
-  canopy(g, m, 3.6, 3.0, 1.4, 0.80, 0.55);                     // prominent bubble canopy
-  // Twin engine intake cheeks — the most recognisable fighter feature
-  for (const sgn of [1, -1]) {
-    addM(g, new THREE.BoxGeometry(3.0, 1.1, 1.0), m, 0.8, -0.15, sgn * 0.95);
-    addM(g, new THREE.BoxGeometry(0.3, 0.9, 1.0), m, 2.35, -0.15, sgn * 0.95); // intake lip
+// ── animation registries ─────────────────────────
+// Template scenes are shared across every aircraft of a kind, so we animate
+// their moving parts ONCE per frame from these global lists.
+const ANIM_SPIN   = []; // { pivot, axis:'x'|'y'|'z', speed }
+const ANIM_LIGHTS = []; // { mesh, type:'strobe'|'beacon'|'steady', phase }
+const SUN_LIGHTS  = []; // key directional lights, moved by the time-of-day control
+
+// A spinning rotor / propeller. Creates a pivot at (cx,cy,cz), adds `n` blades
+// plus a faint translucent disc that suggests motion blur, registers the pivot
+// for per-frame rotation, and returns it. axis is the spin axis.
+function spinner(parent, cx, cy, cz, o) {
+  const { len = 12, w = 0.7, thick = 0.28, n = 4, axis = 'y', speed = 0.9, disc = true } = o;
+  const pivot = grp();
+  pivot.position.set(cx, cy, cz);
+  const bm = M.rotor;
+  for (let i = 0; i < n; i++) {
+    const a = (i / n) * Math.PI * 2;
+    let geom, rx = 0, ry = 0, rz = 0;
+    if (axis === 'y')      { geom = new THREE.BoxGeometry(len, thick, w); ry = a; }
+    else if (axis === 'x') { geom = new THREE.BoxGeometry(thick, len, w); rx = a; }
+    else                   { geom = new THREE.BoxGeometry(len, w, thick); rz = a; }
+    addM(pivot, geom, bm, 0, 0, 0, rx, ry, rz);
   }
-  // Main delta wing — thick panels so sides are visible from angle
-  addWings(g, m, { rootLE: 2.5, rootTE: -5.5, tipLE: -3.5, tipTE: -5.8, tip: 6.0, thick: 0.65 });
-  // Canards
-  addWings(g, m, { rootLE: 4.8, rootTE: 3.0, tipLE: 3.2, tipTE: 2.4, tip: 2.6, thick: 0.40 });
-  // Twin canted tails — taller, thicker
-  const finPts = [[-4.0, 0], [-4.8, 4.0], [-6.2, 4.0], [-5.6, 0]];
-  addFin(g, m, finPts, 0.35, -1.0, 0.4,  1.5,  0.22);
-  addFin(g, m, finPts, 0.35, -1.0, 0.4, -1.5, -0.22);
+  if (disc) {
+    const dm = new THREE.MeshBasicMaterial({
+      color: 0xaab4c0, transparent: true, opacity: 0.10,
+      depthWrite: false, side: THREE.DoubleSide });
+    const dg = new THREE.CircleGeometry(len / 2, 24);
+    const d = new THREE.Mesh(dg, dm);
+    if (axis === 'y') d.rotation.x = -Math.PI / 2;
+    else if (axis === 'z') d.rotation.y = 0, d.rotation.x = 0; // in XY plane
+    else d.rotation.y = Math.PI / 2;                            // prop: YZ plane
+    d.frustumCulled = false;
+    pivot.add(d);
+  }
+  // small hub cap
+  addM(pivot, new THREE.SphereGeometry(w * 0.9, 8, 6), bm, 0, 0, 0);
+  parent.add(pivot);
+  ANIM_SPIN.push({ pivot, axis, speed });
+  return pivot;
+}
+
+// Wingtip + tail navigation lights. Red (left/port), green (right/stbd) steady;
+// a white tail strobe and a red top beacon that flash on their own cadence.
+function navLights(g, o) {
+  const { span, back, top = 0, front = 0, wingY = 0 } = o;
+  const r = 0.32;
+  const sph = () => new THREE.SphereGeometry(r, 6, 5);
+  const L = new THREE.Mesh(sph(), M.navRed);   L.position.set(front, wingY,  span); L.frustumCulled = false; g.add(L);
+  const R = new THREE.Mesh(sph(), M.navGreen); R.position.set(front, wingY, -span); R.frustumCulled = false; g.add(R);
+  ANIM_LIGHTS.push({ mesh: L, type: 'steady' }, { mesh: R, type: 'steady' });
+  const S = new THREE.Mesh(sph(), M.navWhite); S.position.set(back, top, 0); S.frustumCulled = false; g.add(S);
+  ANIM_LIGHTS.push({ mesh: S, type: 'strobe', phase: 0 });
+  if (top) {
+    const B = new THREE.Mesh(sph(), M.navRed); B.position.set(front * 0.2, top, 0); B.frustumCulled = false; g.add(B);
+    ANIM_LIGHTS.push({ mesh: B, type: 'beacon', phase: 0.5 });
+  }
+}
+
+// Cached emissive accent material per kind (wingtip/tail identity stripes).
+const _accentCache = {};
+function accentMat(kind) {
+  if (_accentCache[kind]) return _accentCache[kind];
+  const c = KIND_ACCENT[kind] || 0xffffff;
+  const m = new THREE.MeshStandardMaterial({
+    color: c, emissive: c, emissiveIntensity: 0.9,
+    metalness: 0.2, roughness: 0.5, side: THREE.DoubleSide });
+  _accentCache[kind] = m;
+  return m;
+}
+// Coloured fin-cap stripe for at-a-glance type identification.
+function finStripe(g, kind, px, py, pz, w = 1.2, h = 1.0) {
+  addM(g, new THREE.BoxGeometry(w, h, 0.4), accentMat(kind), px, py, pz);
+}
+
+// ── Fighter (F-22 / Rafale style) ────────────────────
+function buildFighter() {
+  const g = grp(), m = M.fighter, kind = 'fighter';
+  addM(g, cylX(0.74, 0.52, 11, 10), m);                        // blended fuselage
+  addM(g, coneX(0.46, 6.0, 10), m, 8.3);                       // sharp radar nose
+  addM(g, cylX(0.05, 0.05, 2.2, 4), m, 11.3);                  // pitot boom
+  canopy(g, m, 3.8, 3.2, 1.35, 0.85, 0.60);                    // bubble canopy
+  // Chined forebody / LERX leading-edge extensions
+  addWings(g, m, { rootLE: 5.5, rootTE: 1.0, tipLE: 3.0, tipTE: 1.2, tip: 1.9, thick: 0.30, y: -0.1 });
+  // Twin engine intake cheeks
+  for (const sgn of [1, -1]) {
+    addM(g, new THREE.BoxGeometry(3.4, 1.15, 1.0), m, 0.7, -0.22, sgn * 0.95);
+    addM(g, new THREE.BoxGeometry(0.35, 0.95, 1.05), M.glass, 2.45, -0.22, sgn * 0.95); // dark intake
+  }
+  // Main clipped-delta wing
+  addWings(g, m, { rootLE: 2.6, rootTE: -5.6, tipLE: -3.6, tipTE: -5.9, tip: 6.2, thick: 0.55, y: -0.05 });
+  // Twin canted tails
+  const finPts = [[-4.0, 0], [-4.9, 4.2], [-6.3, 4.2], [-5.6, 0]];
+  addFin(g, m, finPts, 0.32, -1.0, 0.4,  1.6,  0.26);
+  addFin(g, m, finPts, 0.32, -1.0, 0.4, -1.6, -0.26);
+  finStripe(g, kind, -5.6, 3.6,  1.6, 1.2, 0.7);
+  finStripe(g, kind, -5.6, 3.6, -1.6, 1.2, 0.7);
   // Horizontal stabilators
-  addWings(g, m, { rootLE: -5.0, rootTE: -6.8, tipLE: -6.6, tipTE: -7.4, tip: 3.2, thick: 0.40 });
-  // Afterburner nozzle rings
-  for (const sgn of [1, -1])
-    addM(g, new THREE.TorusGeometry(0.42, 0.18, 6, 12), m, -8.5, 0, sgn * 0.55, 0, Math.PI / 2);
+  addWings(g, m, { rootLE: -5.0, rootTE: -6.9, tipLE: -6.7, tipTE: -7.5, tip: 3.3, thick: 0.34 });
+  // Twin afterburner nozzles — glowing
+  for (const sgn of [1, -1]) {
+    addM(g, cylX(0.46, 0.30, 1.1, 10), m, -6.9, 0, sgn * 0.55);
+    addM(g, new THREE.CircleGeometry(0.30, 12), M.glowRed, -7.45, 0, sgn * 0.55, 0, -Math.PI / 2, 0);
+  }
+  navLights(g, { span: 6.2, back: -6.6, front: 8.0, top: 0, wingY: -0.05 });
   return g;
 }
 
-// ── Tanker (KC-135 / KC-46 / A330 MRTT) ─────────────────────
+// ── Tanker (KC-135 / KC-46 / A330 MRTT) ─────────────
 function buildTanker() {
-  const g = grp(), m = M.tanker;
-  addM(g, cylX(1.10, 0.95, 18, 12), m);                        // fat round fuselage
-  addM(g, coneX(0.88, 4.5, 10), m, 11.0);
-  addM(g, coneMX(0.60, 3.5, 10), m, -10.75);
-  canopy(g, m, 8.0, 1.8, 1.2, 0.6, 0.8);
-  // Swept wings — thick panels
-  addWings(g, m, { rootLE: 3.5, rootTE: -2.5, tipLE: -5.5, tipTE: -7.0, tip: 11.5,
-                   thick: 0.70, y: -0.2, dihedral: 0.10 });
-  // 4 large engine nacelles with prominent intake rings
+  const g = grp(), m = M.tanker, kind = 'tanker';
+  addM(g, cylX(1.12, 0.95, 18, 14), m);
+  addM(g, coneX(0.9, 4.6, 12), m, 11.2);
+  addM(g, coneMX(0.58, 3.6, 12), m, -10.8);
+  canopy(g, m, 8.2, 2.0, 1.2, 0.55, 0.85);
+  // Cabin window strip (dark)
+  addM(g, new THREE.BoxGeometry(12, 0.35, 0.05), M.glass, 2, 0.55, 1.02);
+  addM(g, new THREE.BoxGeometry(12, 0.35, 0.05), M.glass, 2, 0.55, -1.02);
+  addWings(g, m, { rootLE: 3.5, rootTE: -2.5, tipLE: -5.5, tipTE: -7.0, tip: 11.8,
+                   thick: 0.62, y: -0.2, dihedral: 0.12 });
+  // 4 turbofans with dark fan face + hot core
   [[5.0],[9.0]].forEach(([pz]) => {
     for (const sgn of [1,-1]) {
-      addM(g, new THREE.BoxGeometry(0.55, 0.9, 0.3), m, 0.4, -0.9, sgn*pz*0.65);  // pylon
-      addM(g, cylX(0.85, 0.72, 4.0, 12), m, 1.4, -1.5, sgn*pz);                   // nacelle
-      addM(g, new THREE.TorusGeometry(0.82, 0.18, 8, 16), m, 3.45, -1.5, sgn*pz, 0, Math.PI/2); // intake
+      addM(g, new THREE.BoxGeometry(0.55, 0.95, 0.3), m, 0.4, -0.95, sgn*pz*0.65);
+      addM(g, cylX(0.86, 0.74, 4.0, 14), m, 1.4, -1.55, sgn*pz);
+      addM(g, new THREE.CircleGeometry(0.66, 14), M.glass,   3.42, -1.55, sgn*pz, 0, -Math.PI/2, 0); // fan
+      addM(g, new THREE.CircleGeometry(0.5,  12), M.glowRed, -0.62, -1.55, sgn*pz, 0,  Math.PI/2, 0); // exhaust
     }
   });
-  // Tail surfaces
-  addWings(g, m, { rootLE: -9.5, rootTE: -12.0, tipLE: -11.5, tipTE: -12.6, tip: 4.5, thick: 0.45, y: 0.4 });
-  addFin(g, m, [[-9.5,0],[-11.5,5.0],[-12.6,5.0],[-11.0,0]], 0.35, 0, 0.6, 0);
-  // Refuelling boom — thicker, more visible
-  addM(g, cylX(0.22, 0.14, 7.0, 6), m, -13.8, -1.6, 0, 0, 0, 0.38);
-  addM(g, cylX(0.12, 0.06, 2.5, 4), m, -17.0, -2.5, 0, 0, 0, 0.20);  // drogue end
+  addWings(g, m, { rootLE: -9.5, rootTE: -12.0, tipLE: -11.5, tipTE: -12.6, tip: 4.6, thick: 0.42, y: 0.4 });
+  addFin(g, m, [[-9.5,0],[-11.5,5.2],[-12.6,5.2],[-11.0,0]], 0.32, 0, 0.6, 0);
+  finStripe(g, kind, -11.6, 4.4, 0, 1.0, 1.0);
+  // Refuelling boom
+  addM(g, cylX(0.24, 0.14, 7.5, 8), m, -14.0, -1.7, 0, 0, 0, 0.36);
+  addWings(g, m, { rootLE: -15.5, rootTE: -17.0, tipLE: -16.2, tipTE: -16.9, tip: 1.8, thick: 0.18, y: -2.8 }); // ruddervators
+  navLights(g, { span: 11.8, back: -10.5, front: 10.5, top: 5.4, wingY: 0.0 });
   return g;
 }
 
-// ── AWACS (E-3 Sentry / E-7 Wedgetail) ───────────────────────
+// ── AWACS (E-3 Sentry / E-7 Wedgetail) ──────────────
 function buildAWACS() {
-  const g = grp(), m = M.awacs, md = M.awacsDsk;
-  addM(g, cylX(1.10, 0.95, 17, 12), m);
-  addM(g, coneX(0.88, 4.0, 10), m, 10.5);
-  addM(g, coneMX(0.60, 3.2, 10), m, -10.0);
-  canopy(g, m, 7.5, 1.8, 1.2, 0.6, 0.8);
-  addWings(g, m, { rootLE: 3.0, rootTE: -3.0, tipLE: -5.5, tipTE: -7.0, tip: 10.5,
-                   thick: 0.65, y: -0.2, dihedral: 0.08 });
-  [[4.5],[8.5]].forEach(([pz]) => {
-    for (const sgn of [1,-1])
-      addM(g, cylX(0.65, 0.55, 3.5, 8), m, 1.0, -1.3, sgn*pz);
-  });
-  addWings(g, m, { rootLE: -9.0, rootTE: -11.5, tipLE: -11.0, tipTE: -12.0, tip: 4.2, thick: 0.45, y: 0.4 });
-  addFin(g, m, [[-9.0,0],[-11.0,4.5],[-12.0,4.5],[-10.5,0]], 0.35, 0, 0.6, 0);
-  // Rotodome struts — thicker, more visible
-  addM(g, new THREE.BoxGeometry(0.7, 2.6, 0.5), m, 1.0, 2.1,  1.7);
-  addM(g, new THREE.BoxGeometry(0.7, 2.6, 0.5), m, 1.0, 2.1, -1.7);
-  // Rotodome disc — the unmissable signature feature
-  addM(g, new THREE.CylinderGeometry(7.0, 7.0, 1.1, 22), md, 0.5, 3.8);
-  addM(g, new THREE.CylinderGeometry(7.0, 6.5, 0.4, 22), md, 0.5, 4.45);
-  addM(g, new THREE.CylinderGeometry(7.0, 6.5, 0.4, 22), md, 0.5, 3.15);
-  return g;
-}
-
-// ── Cargo (C-17 Globemaster / C-130 Hercules) ────────────────
-function buildCargo() {
-  const g = grp(), m = M.cargo;
-  addM(g, cylX(1.7, 1.5, 16, 6), m, 0, 0.3);                   // boxy 6-sided body
-  addM(g, coneX(1.3, 3.5, 6), m, 9.4, 0.3);                    // squared-off nose
-  canopy(g, m, 7.0, 1.8, 1.5, 0.7, 1.5);                       // prominent cockpit hump
-  // Rear upsweep for ramp
-  addM(g, cylX(1.5, 0.6, 5.5, 6), m, -9.8, 1.5, 0, 0, 0, -0.32);
-  addM(g, new THREE.BoxGeometry(3.0, 0.4, 2.8), m, -12.2, 0.3, 0); // cargo ramp slab
-  // High-mounted swept wings — thick
-  addWings(g, m, { rootLE: 3.0, rootTE: -2.5, tipLE: -4.0, tipTE: -5.5, tip: 11.5,
-                   thick: 0.70, y: 2.0, dihedral: -0.05 });
-  // 4 large turbofan nacelles with intake rings
+  const g = grp(), m = M.awacs, md = M.awacsDsk, kind = 'awacs';
+  addM(g, cylX(1.12, 0.95, 17, 14), m);
+  addM(g, coneX(0.9, 4.2, 12), m, 10.6);
+  addM(g, coneMX(0.58, 3.3, 12), m, -10.1);
+  canopy(g, m, 7.7, 2.0, 1.2, 0.55, 0.85);
+  addWings(g, m, { rootLE: 3.0, rootTE: -3.0, tipLE: -5.5, tipTE: -7.0, tip: 10.8,
+                   thick: 0.58, y: -0.2, dihedral: 0.10 });
   [[4.5],[8.5]].forEach(([pz]) => {
     for (const sgn of [1,-1]) {
-      addM(g, new THREE.BoxGeometry(0.6, 0.8, 0.3), m, 0.8, 1.6, sgn*pz*0.7);
-      addM(g, cylX(0.78, 0.65, 3.5, 8), m, 1.8, 1.0, sgn*pz);
-      addM(g, new THREE.TorusGeometry(0.75, 0.18, 6, 12), m, 3.6, 1.0, sgn*pz, 0, Math.PI/2);
+      addM(g, cylX(0.66, 0.56, 3.5, 12), m, 1.0, -1.35, sgn*pz);
+      addM(g, new THREE.CircleGeometry(0.5, 12), M.glass, 2.7, -1.35, sgn*pz, 0, -Math.PI/2, 0);
     }
   });
-  // T-tail — tall vertical fin
-  addFin(g, m, [[-9.5,0],[-11.8,6.2],[-12.8,6.2],[-11.0,0]], 0.40, 0, 1.5, 0);
-  addWings(g, m, { rootLE: -11.0, rootTE: -12.8, tipLE: -12.2, tipTE: -13.2, tip: 5.5, thick: 0.40, y: 7.5 });
+  addWings(g, m, { rootLE: -9.0, rootTE: -11.5, tipLE: -11.0, tipTE: -12.0, tip: 4.3, thick: 0.42, y: 0.4 });
+  addFin(g, m, [[-9.0,0],[-11.0,4.6],[-12.0,4.6],[-10.5,0]], 0.32, 0, 0.6, 0);
+  finStripe(g, kind, -11.1, 4.0, 0, 1.0, 0.9);
+  // Rotodome on twin struts — the signature feature
+  addM(g, new THREE.BoxGeometry(0.7, 2.7, 0.5), m, 1.0, 2.2,  1.7);
+  addM(g, new THREE.BoxGeometry(0.7, 2.7, 0.5), m, 1.0, 2.2, -1.7);
+  addM(g, new THREE.CylinderGeometry(7.0, 7.0, 1.0, 24), md, 0.5, 3.9);
+  addM(g, new THREE.CylinderGeometry(7.0, 6.3, 0.45, 24), md, 0.5, 4.5);
+  addM(g, new THREE.CylinderGeometry(7.0, 6.3, 0.45, 24), md, 0.5, 3.3);
+  addM(g, new THREE.BoxGeometry(0.5, 0.3, 13.6), accentMat(kind), 1.3, 3.9, 0); // radar bar
+  navLights(g, { span: 10.8, back: -10.0, front: 9.8, top: 4.4, wingY: 0.0 });
   return g;
 }
 
-// ── Attack Helicopter (AH-64 Apache) ─────────────────────────
-function buildAttackHeli() {
-  const g = grp(), m = M.atkHeli;
-  addM(g, cylX(0.70, 0.50, 9.5, 8), m);                        // slightly wider body
-  addM(g, new THREE.BoxGeometry(2.0, 1.3, 1.6), m, 3.8, 0.60); // front cockpit
-  addM(g, new THREE.BoxGeometry(1.8, 1.5, 1.7), m, 2.0, 0.90); // rear cockpit (stepped higher)
-  addM(g, coneX(0.28, 1.8, 6), m, 5.6, -0.5);                  // chin gun barrel
-  addM(g, new THREE.BoxGeometry(1.2, 0.9, 1.2), m, 4.6, -0.6); // sensor turret
-  addM(g, cylX(0.22, 0.12, 9.0, 6), m, -7.5, 0.5);             // tail boom
-  // Stub weapon wings
-  addWings(g, m, { rootLE: 1.0, rootTE: -1.5, tipLE: 0.6, tipTE: -1.2, tip: 3.8, thick: 0.35, y: 0 });
-  // Weapon pods — bigger, more visible
-  for (const sgn of [1,-1]) {
-    addM(g, new THREE.BoxGeometry(2.2, 0.55, 0.55), m, -0.2, -0.35, sgn * 2.6);
-    addM(g, new THREE.BoxGeometry(2.2, 0.55, 0.55), m, -0.2, -0.35, sgn * 3.6);
-  }
-  // Main rotor — 4 blades with proper visible thickness
-  addM(g, cylX(0.35, 0.35, 1.0, 8), m, 0.5, 1.9);
-  for (let i = 0; i < 4; i++)
-    addM(g, new THREE.BoxGeometry(13.0, 0.30, 0.7), m, 0.5, 1.9, 0, 0, i * Math.PI / 4, 0);
-  // Tail fin + rotor disc
-  addFin(g, m, [[-11.0,-0.3],[-11.8,2.0],[-12.6,2.0],[-12.2,-0.3]], 0.25, 0, 0, 0);
-  addM(g, new THREE.CylinderGeometry(1.8, 1.8, 0.18, 5), m, -11.8, 0.7, 0.7, Math.PI / 2);
-  addM(g, cylX(0.08, 0.08, 7.0, 4), m, 0.5, -1.4, 0); // landing gear
-  return g;
-}
-
-// ── Chinook (CH-47 transport helicopter) ──────────────────────
-function buildChinook() {
-  const g = grp(), m = M.trnHeli;
-  addM(g, cylX(1.35, 1.15, 15, 8), m);
-  addM(g, new THREE.BoxGeometry(2.8, 2.4, 2.6), m, 8.8, 0.2);   // blunt nose
-  canopy(g, m, 8.8, 1.1, 1.0, 0.55, 1.3);
-  // Rotor pylons
-  addM(g, new THREE.BoxGeometry(1.8, 1.8, 1.8), m,  6.0, 1.8);
-  addM(g, cylX(1.1, 0.55, 4.2, 8), m, -8.2, 2.0, 0, 0, 0, -0.28);  // rear upswept pylon
-  // Twin 4-blade rotors — thick blades so they're visible
-  [[6.0, 3.0],[-6.5, 3.4]].forEach(([px, py]) => {
-    addM(g, cylX(0.40, 0.40, 1.0, 8), m, px, py);
-    for (let i = 0; i < 4; i++)
-      addM(g, new THREE.BoxGeometry(14.0, 0.30, 0.75), m, px, py, 0, 0, i * Math.PI / 4, 0);
+// ── Cargo (C-17 Globemaster) ─────────────────────
+function buildCargo() {
+  const g = grp(), m = M.cargo, kind = 'cargo';
+  addM(g, cylX(1.75, 1.55, 16, 8), m, 0, 0.3);
+  addM(g, coneX(1.35, 3.6, 8), m, 9.5, 0.3);
+  canopy(g, m, 7.2, 2.0, 1.5, 0.7, 1.5);
+  // Rear upsweep + ramp
+  addM(g, cylX(1.5, 0.55, 5.6, 8), m, -9.9, 1.6, 0, 0, 0, -0.32);
+  addM(g, new THREE.BoxGeometry(3.0, 0.4, 2.9), m, -12.3, 0.3, 0);
+  // High-mounted swept wings
+  addWings(g, m, { rootLE: 3.0, rootTE: -2.5, tipLE: -4.0, tipTE: -5.5, tip: 11.8,
+                   thick: 0.62, y: 2.1, dihedral: -0.06 });
+  for (const sgn of [1,-1]) // raked winglets
+    addM(g, new THREE.BoxGeometry(1.6, 2.2, 0.3), m, -4.6, 2.9, sgn*11.7, 0, 0, 0.15);
+  // 4 turbofans
+  [[4.5],[8.5]].forEach(([pz]) => {
+    for (const sgn of [1,-1]) {
+      addM(g, new THREE.BoxGeometry(0.6, 0.85, 0.3), m, 0.8, 1.65, sgn*pz*0.7);
+      addM(g, cylX(0.8, 0.66, 3.6, 12), m, 1.8, 1.0, sgn*pz);
+      addM(g, new THREE.CircleGeometry(0.6, 12), M.glass,   3.55, 1.0, sgn*pz, 0, -Math.PI/2, 0);
+      addM(g, new THREE.CircleGeometry(0.45, 12), M.glowRed, 0.05, 1.0, sgn*pz, 0, Math.PI/2, 0);
+    }
   });
-  addM(g, new THREE.BoxGeometry(2.8, 0.4, 2.6), m, -9.8, -0.4);  // rear ramp
-  addM(g, new THREE.BoxGeometry(8.5, 1.0, 0.9), m, 0.5, -1.1,  1.8); // sponsons
-  addM(g, new THREE.BoxGeometry(8.5, 1.0, 0.9), m, 0.5, -1.1, -1.8);
+  // T-tail
+  addFin(g, m, [[-9.5,0],[-11.8,6.4],[-12.8,6.4],[-11.0,0]], 0.38, 0, 1.5, 0);
+  finStripe(g, kind, -12.0, 5.5, 0, 1.0, 1.0);
+  addWings(g, m, { rootLE: -11.0, rootTE: -12.8, tipLE: -12.2, tipTE: -13.2, tip: 5.6, thick: 0.36, y: 7.7 });
+  navLights(g, { span: 11.8, back: -11.5, front: 9.5, top: 6.6, wingY: 2.1 });
   return g;
 }
 
-// ── Civil airliner (A320 / 737 style) ────────────────────────
+// ── Attack Helicopter (AH-64 Apache) ─────────────────
+function buildAttackHeli() {
+  const g = grp(), m = M.atkHeli, kind = 'attack_heli';
+  addM(g, cylX(0.72, 0.5, 9.5, 8), m);
+  addM(g, new THREE.BoxGeometry(2.0, 1.3, 1.6), M.glass, 3.8, 0.62); // front cockpit glass
+  addM(g, new THREE.BoxGeometry(1.8, 1.5, 1.7), M.glass, 2.0, 0.95); // rear cockpit glass
+  addM(g, new THREE.BoxGeometry(1.3, 1.0, 1.3), m, 5.0, -0.55);      // sensor turret
+  addM(g, new THREE.SphereGeometry(0.55, 10, 8), M.glass, 5.5, -0.55);// FLIR ball
+  addM(g, cylX(0.22, 0.12, 9.5, 6), m, -7.6, 0.5);                   // tail boom
+  // Stub weapon wings + pods
+  addWings(g, m, { rootLE: 1.0, rootTE: -1.5, tipLE: 0.6, tipTE: -1.2, tip: 3.9, thick: 0.32 });
+  for (const sgn of [1,-1]) {
+    addM(g, cylX(0.3, 0.3, 2.4, 8), m, -0.2, -0.4, sgn*2.6);        // rocket pod
+    addM(g, new THREE.BoxGeometry(1.6, 0.5, 0.5), m, -0.2, -0.4, sgn*3.6); // missile rail
+    // Hellfire tubes
+    for (let k=0;k<2;k++) addM(g, cylX(0.12,0.12,1.6,6), m, -0.2, -0.6-k*0.28, sgn*3.6);
+  }
+  // Main rotor — spinning, 4 blades
+  addM(g, cylX(0.36, 0.36, 1.1, 8), m, 0.5, 2.0);
+  spinner(g, 0.5, 2.15, 0, { len: 13.5, w: 0.7, thick: 0.28, n: 4, axis: 'y', speed: 1.4 });
+  // Vertical stab + tail rotor (spinning)
+  addFin(g, m, [[-11.0,-0.3],[-11.8,2.2],[-12.6,2.2],[-12.2,-0.3]], 0.24);
+  finStripe(g, kind, -12.0, 1.7, 0.35, 0.8, 0.7);
+  spinner(g, -11.8, 0.8, 0.75, { len: 3.6, w: 0.3, thick: 0.14, n: 4, axis: 'z', speed: 2.6, disc: true });
+  // Tailwheel + main gear
+  addM(g, cylX(0.09, 0.09, 3.4, 5), m, 0.5, -1.5, 0);
+  navLights(g, { span: 3.9, back: -12.4, front: 5.6, top: 2.2, wingY: -0.2 });
+  return g;
+}
+
+// ── Chinook (CH-47 tandem-rotor transport) ───────────
+function buildChinook() {
+  const g = grp(), m = M.trnHeli, kind = 'transport_heli';
+  addM(g, cylX(1.4, 1.2, 15, 8), m);
+  addM(g, new THREE.BoxGeometry(2.8, 2.4, 2.6), m, 8.8, 0.2);
+  addM(g, new THREE.BoxGeometry(2.2, 1.4, 2.4), M.glass, 8.9, 0.4);  // cockpit glass
+  addM(g, new THREE.BoxGeometry(1.9, 1.9, 1.9), m, 6.0, 1.9);        // front pylon
+  addM(g, cylX(1.15, 0.55, 4.4, 8), m, -8.3, 2.1, 0, 0, 0, -0.28);   // rear pylon
+  // Twin tandem spinning rotors
+  spinner(g, 6.0, 3.2, 0, { len: 14.5, w: 0.75, thick: 0.28, n: 3, axis: 'y', speed: 1.2 });
+  spinner(g, -6.6, 3.6, 0, { len: 14.5, w: 0.75, thick: 0.28, n: 3, axis: 'y', speed: -1.2 });
+  addM(g, new THREE.BoxGeometry(2.8, 0.4, 2.6), m, -9.9, -0.4);      // rear ramp
+  addM(g, new THREE.BoxGeometry(8.5, 1.0, 0.9), m, 0.5, -1.2,  1.85); // sponsons
+  addM(g, new THREE.BoxGeometry(8.5, 1.0, 0.9), m, 0.5, -1.2, -1.85);
+  finStripe(g, kind, -8.4, 4.0, 0, 1.4, 0.7);
+  navLights(g, { span: 3.4, back: -9.6, front: 8.6, top: 4.2, wingY: -1.0 });
+  return g;
+}
+
+// ── Civil airliner (A320 / 737 style) ──────────────
 function buildCivJet() {
-  const g = grp(), m = M.civJet;
-  addM(g, cylX(0.95, 0.80, 14, 10), m);
-  addM(g, coneX(0.72, 3.2, 10), m, 8.5);
-  addM(g, coneMX(0.48, 3.0, 10), m, -8.5);
-  canopy(g, m, 6.0, 1.3, 0.9, 0.45, 0.65);
-  addWings(g, m, { rootLE: 2.5, rootTE: -2.5, tipLE: -4.0, tipTE: -5.2, tip: 10.0,
-                   thick: 0.55, y: -0.2, dihedral: 0.10 });
-  for (const sgn of [1,-1])
-    addM(g, new THREE.BoxGeometry(1.0, 1.6, 0.22), m, -4.6, 0.5, sgn*9.9, 0, 0, 0.3); // winglets
+  const g = grp(), m = M.civJet, kind = 'civil_jet';
+  addM(g, cylX(0.95, 0.8, 14, 12), m);
+  addM(g, coneX(0.72, 3.2, 12), m, 8.5);
+  addM(g, coneMX(0.46, 3.0, 12), m, -8.5);
+  canopy(g, m, 6.2, 1.4, 0.9, 0.45, 0.6);
+  addM(g, new THREE.BoxGeometry(10, 0.3, 0.05), M.glass, 1, 0.35, 0.86); // window strip
+  addM(g, new THREE.BoxGeometry(10, 0.3, 0.05), M.glass, 1, 0.35, -0.86);
+  addWings(g, m, { rootLE: 2.5, rootTE: -2.5, tipLE: -4.0, tipTE: -5.2, tip: 10.2,
+                   thick: 0.48, y: -0.2, dihedral: 0.12 });
+  for (const sgn of [1,-1]) // winglets
+    addM(g, new THREE.BoxGeometry(1.0, 1.7, 0.22), m, -4.7, 0.6, sgn*10.1, 0, 0, 0.32);
   for (const sgn of [1,-1]) {
     addM(g, new THREE.BoxGeometry(0.4, 0.6, 0.22), m, 0.8, -0.6, sgn*4.0);
-    addM(g, cylX(0.60, 0.50, 3.0, 10), m, 1.5, -1.1, sgn*4.5);
-    addM(g, new THREE.TorusGeometry(0.58, 0.14, 6, 12), m, 3.05, -1.1, sgn*4.5, 0, Math.PI/2);
+    addM(g, cylX(0.6, 0.5, 3.0, 12), m, 1.5, -1.15, sgn*4.5);
+    addM(g, new THREE.CircleGeometry(0.44, 12), M.glass,   3.05, -1.15, sgn*4.5, 0, -Math.PI/2, 0);
+    addM(g, new THREE.CircleGeometry(0.34, 12), M.glowRed, 0.0,  -1.15, sgn*4.5, 0,  Math.PI/2, 0);
   }
-  addWings(g, m, { rootLE: -7.0, rootTE: -9.0, tipLE: -8.6, tipTE: -9.4, tip: 4.0, thick: 0.35, y: 0.3 });
-  addFin(g, m, [[-7.0,0],[-9.0,3.8],[-10.0,3.8],[-8.4,0]], 0.28, 0, 0.5, 0);
+  addWings(g, m, { rootLE: -7.0, rootTE: -9.0, tipLE: -8.6, tipTE: -9.4, tip: 4.1, thick: 0.3, y: 0.3 });
+  addFin(g, m, [[-7.0,0],[-9.0,3.9],[-10.0,3.9],[-8.4,0]], 0.26, 0, 0.5, 0);
+  finStripe(g, kind, -9.2, 3.3, 0, 0.9, 0.8);
+  navLights(g, { span: 10.2, back: -8.6, front: 8.2, top: 4.2, wingY: -0.2 });
   return g;
 }
 
 function buildCivProp() {
-  const g = grp(), m = M.civProp;
-  addM(g, cylX(0.75, 0.60, 10, 8), m);
-  addM(g, coneX(0.52, 2.4, 8), m, 6.6);
-  addM(g, coneMX(0.42, 2.2, 8), m, -6.6);
-  canopy(g, m, 4.6, 1.1, 0.8, 0.45, 0.6);
-  addWings(g, m, { rootLE: 2.0, rootTE: -1.5, tipLE: 1.2, tipTE: -1.3, tip: 8.0, thick: 0.45, y: 0.7 });
+  const g = grp(), m = M.civProp, kind = 'civil_prop';
+  addM(g, cylX(0.75, 0.6, 10, 10), m);
+  addM(g, coneX(0.52, 2.4, 10), m, 6.6);
+  addM(g, coneMX(0.42, 2.2, 10), m, -6.6);
+  canopy(g, m, 4.6, 1.2, 0.8, 0.45, 0.6);
+  addWings(g, m, { rootLE: 2.0, rootTE: -1.5, tipLE: 1.2, tipTE: -1.3, tip: 8.2, thick: 0.42, y: 0.7 });
   for (const sgn of [1,-1]) {
-    addM(g, cylX(0.45, 0.38, 2.6, 8), m, 1.2, 0.6, sgn*3.2);
-    addM(g, new THREE.CylinderGeometry(2.0, 2.0, 0.15, 4), m, 2.7, 0.6, sgn*3.2, 0, 0, Math.PI/2);
+    addM(g, cylX(0.46, 0.38, 2.6, 10), m, 1.2, 0.6, sgn*3.2);       // engine nacelle
+    addM(g, coneX(0.28, 0.8, 8), m, 2.7, 0.6, sgn*3.2);             // spinner cone
+    spinner(g, 2.9, 0.6, sgn*3.2, { len: 4.4, w: 0.28, thick: 0.12, n: 3, axis: 'x', speed: 3.2, disc: true });
   }
-  addWings(g, m, { rootLE: -5.5, rootTE: -7.0, tipLE: -6.6, tipTE: -7.2, tip: 3.2, thick: 0.32, y: 0.2 });
-  addFin(g, m, [[-5.5,0],[-7.0,3.0],[-7.8,3.0],[-6.6,0]], 0.25, 0, 0.4, 0);
+  addWings(g, m, { rootLE: -5.5, rootTE: -7.0, tipLE: -6.6, tipTE: -7.2, tip: 3.3, thick: 0.3, y: 0.2 });
+  addFin(g, m, [[-5.5,0],[-7.0,3.1],[-7.8,3.1],[-6.6,0]], 0.24, 0, 0.4, 0);
+  finStripe(g, kind, -7.2, 2.6, 0, 0.7, 0.7);
+  navLights(g, { span: 8.2, back: -7.0, front: 6.4, top: 3.2, wingY: 0.7 });
   return g;
 }
 
 function buildCivHeli() {
-  const g = grp(), m = M.civHeli;
-  addM(g, cylX(1.35, 1.05, 7.0, 8), m);
-  addM(g, new THREE.SphereGeometry(1.35, 8, 6), m, 2.7, 0, 0, 0, 0, 0, 1.35, 1, 1); // glass nose
-  addM(g, cylX(0.28, 0.16, 8.2, 6), m, -5.5, 0.4);             // tail boom
-  addFin(g, m, [[-8.5,0],[-9.4,2.2],[-10.2,2.2],[-9.6,0]], 0.22, 0, 0.4, 0);
-  // 3-blade rotor — thick blades
-  addM(g, cylX(0.32, 0.32, 0.75, 6), m, 0.3, 2.0);
-  for (let i = 0; i < 3; i++)
-    addM(g, new THREE.BoxGeometry(11.5, 0.28, 0.65), m, 0.3, 2.0, 0, 0, i * Math.PI / 3, 0);
-  addM(g, new THREE.CylinderGeometry(1.1, 1.1, 0.14, 4), m, -9.4, 0.75, 0.55, Math.PI/2);
+  const g = grp(), m = M.civHeli, kind = 'civil_heli';
+  addM(g, cylX(1.35, 1.05, 7.0, 10), m);
+  addM(g, new THREE.SphereGeometry(1.35, 10, 8), M.glass, 2.7, 0, 0, 0, 0, 0, 1.35, 1, 1); // glass nose
+  addM(g, cylX(0.28, 0.16, 8.2, 6), m, -5.5, 0.4);
+  addFin(g, m, [[-8.5,0],[-9.4,2.3],[-10.2,2.3],[-9.6,0]], 0.22, 0, 0.4, 0);
+  finStripe(g, kind, -9.7, 1.9, 0.3, 0.7, 0.6);
+  // Main rotor mast + spinning rotor
+  addM(g, cylX(0.3, 0.3, 1.0, 8), m, 0.3, 2.0);
+  spinner(g, 0.3, 2.2, 0, { len: 12.0, w: 0.6, thick: 0.22, n: 3, axis: 'y', speed: 1.8 });
+  // Tail rotor (spinning)
+  spinner(g, -9.4, 0.75, 0.6, { len: 2.4, w: 0.24, thick: 0.1, n: 2, axis: 'z', speed: 3.4, disc: true });
   // Landing skids
-  addM(g, cylX(0.09, 0.09, 5.8, 4), m, 0.3, -1.5,  1.05);
-  addM(g, cylX(0.09, 0.09, 5.8, 4), m, 0.3, -1.5, -1.05);
+  addM(g, cylX(0.09, 0.09, 5.8, 6), m, 0.3, -1.5,  1.05);
+  addM(g, cylX(0.09, 0.09, 5.8, 6), m, 0.3, -1.5, -1.05);
+  for (const sgn of [1,-1]) { // skid struts
+    addM(g, cylX(0.07, 0.07, 1.6, 5), m, 1.4, -0.9, sgn*1.05, 0, 0, 0.5);
+    addM(g, cylX(0.07, 0.07, 1.6, 5), m, -0.8, -0.9, sgn*1.05, 0, 0, 0.5);
+  }
+  navLights(g, { span: 1.1, back: -9.6, front: 3.9, top: 2.2, wingY: -1.5 });
   return g;
 }
 
-// ── Three.js custom layer ─────────────────────────────────────
+// ── Three.js custom layer ────────────────────────
 // KEY PATTERN: model at scene origin; camera = mercatorMatrix × aircraft_transform
 // This is the official MapLibre approach — proven to work.
 const threeLayer = (() => {
-  let cam, tpl, loader, stalkScene;
+  let cam, tpl, loader, stalkScene, lastFrame = 0;
   const modelCache = new Map(); // FR24 basename → { scene } | 'loading' | 'failed'
   // Pre-allocated matrices to avoid GC pressure in render loop
   const M4 = new THREE.Matrix4();
@@ -697,15 +918,18 @@ const threeLayer = (() => {
 
   function mkScene(model) {
     const sc = new THREE.Scene();
-    sc.add(new THREE.AmbientLight(0xffffff, 0.9));
-    const sun = new THREE.DirectionalLight(0xfff8e0, 1.8);
+    if (ENV_MAP) sc.environment = ENV_MAP; // image-based reflections
+    sc.add(new THREE.AmbientLight(0xffffff, 0.35));
+    // Key "sun" — registered so the time-of-day control can move/recolour it.
+    const sun = new THREE.DirectionalLight(0xfff4dc, 2.0);
     sun.position.set(1, 1.5, 0.8);
     sc.add(sun);
-    const fill = new THREE.DirectionalLight(0xd0eeff, 0.7);
-    fill.position.set(-1, 0.5, -1);
+    SUN_LIGHTS.push(sun);
+    const fill = new THREE.DirectionalLight(0xbfe0ff, 0.55);
+    fill.position.set(-1, 0.4, -1);
     sc.add(fill);
-    const bottom = new THREE.DirectionalLight(0xffffff, 0.3);
-    bottom.position.set(0, -1, 0); // subtle under-lighting so dark faces aren't pitch black
+    const bottom = new THREE.DirectionalLight(0xffffff, 0.22);
+    bottom.position.set(0, -1, 0);
     sc.add(bottom);
     model.traverse(o => { o.frustumCulled = false; });
     sc.add(model);
@@ -824,6 +1048,16 @@ const threeLayer = (() => {
         canvas: map.getCanvas(), context: gl, antialias: true,
       });
       threeRenderer.autoClear = false; // ← critical: don't clear between aircraft draws
+      threeRenderer.toneMapping = THREE.ACESFilmicToneMapping;
+      threeRenderer.toneMappingExposure = 1.05;
+
+      // Generate a shared IBL environment once the renderer exists — this is
+      // what gives every metal surface real reflections.
+      try {
+        const pmrem = new THREE.PMREMGenerator(threeRenderer);
+        pmrem.compileEquirectangularShader();
+        ENV_MAP = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+      } catch (e) { console.warn('[env] IBL unavailable', e); }
 
       tpl = {
         fighter:        mkScene(buildFighter()),
@@ -866,6 +1100,27 @@ const threeLayer = (() => {
       const PROBE = 0.000004; // tiny mercator step for measuring NDC basis vectors
       threeRenderer.resetState();
       threeRenderer.clearDepth();
+
+      // ── per-frame animation (updated ONCE, since scenes are shared) ────────
+      const now = performance.now();
+      const dt = Math.min((now - (lastFrame || now)) / 1000, 0.1);
+      lastFrame = now;
+      if (ANIMATE) {
+        for (const s of ANIM_SPIN) s.pivot.rotation[s.axis] += s.speed * dt * 12;
+      }
+      // Navigation lights: steady wingtips always on; white strobe double-flash;
+      // red beacon slow pulse. Toggling mesh.visible is cheap and shared.
+      const tsec = now / 1000;
+      for (const L of ANIM_LIGHTS) {
+        if (!SHOW_LIGHTS) { L.mesh.visible = false; continue; }
+        if (L.type === 'steady') L.mesh.visible = true;
+        else if (L.type === 'strobe') {
+          const ph = (tsec % 1.4);
+          L.mesh.visible = (ph < 0.06) || (ph > 0.16 && ph < 0.22);
+        } else { // beacon
+          L.mesh.visible = ((tsec + (L.phase || 0)) % 1.2) < 0.5;
+        }
+      }
 
       // Zoom-scaled icon size: gentle growth so models look right at any zoom.
       // Math.pow(1.2, zoom-5) gives 1× at zoom 5, ~2.5× at zoom 10, capped at 3×.
@@ -915,7 +1170,7 @@ const threeLayer = (() => {
         trailMat.dispose();
       }
 
-      // ── Heading prediction lines ──────────────────────────────────────────
+      // ── Heading prediction lines ────────────────────────────────
       // Dotted forward-projection of each aircraft ~4 minutes ahead based on
       // current ground speed and track. Rendered as a segmented NDC line.
       if (SHOW_PREDICT) {
@@ -976,7 +1231,7 @@ const threeLayer = (() => {
         predMat.dispose();
       }
 
-      // ── Aircraft as fixed-pixel 3D icons ──────────────────────────────────
+      // ── Aircraft as fixed-pixel 3D icons ───────────────────────────
       // Aircraft are placed at their TRUE 3D altitude by projecting (gx, gy, malt)
       // through the map matrix. Stalk goes from ground clip to aircraft clip.
       // Icon size is normalised to ICON px (×zoom scale) using ground-point basis
@@ -1039,13 +1294,22 @@ const threeLayer = (() => {
         const hd = THREE.MathUtils.degToRad(d.track || 0);
         const ch = Math.cos(hd), sh = Math.sin(hd);
         const fwd = [Nx[0]*ch + Ex[0]*sh, Nx[1]*ch + Ex[1]*sh, Nx[2]*ch + Ex[2]*sh];
-        const lat = [Ex[0]*ch - Nx[0]*sh, Ex[1]*ch - Nx[1]*sh, Ex[2]*ch - Nx[2]*sh];
+        let lat = [Ex[0]*ch - Nx[0]*sh, Ex[1]*ch - Nx[1]*sh, Ex[2]*ch - Nx[2]*sh];
+        let up  = Ux;
+
+        // Bank into turns: roll the up/lateral axes about the forward axis by the
+        // aircraft's computed bank angle (fixed-wing only — helis/props stay level).
+        if (d.bank && d.kind !== 'attack_heli' && d.kind !== 'transport_heli' && d.kind !== 'civil_heli') {
+          const b = THREE.MathUtils.degToRad(d.bank), cb = Math.cos(b), sb = Math.sin(b);
+          up  = [Ux[0]*cb + lat[0]*sb, Ux[1]*cb + lat[1]*sb, Ux[2]*cb + lat[2]*sb];
+          lat = [lat[0]*cb - Ux[0]*sb, lat[1]*cb - Ux[1]*sb, lat[2]*cb - Ux[2]*sb];
+        }
 
         // Place model at actual 3D altitude position (paX, paY, paZ).
         Pic.set(
-          fwd[0], Ux[0], lat[0], paX,
-          fwd[1], Ux[1], lat[1], paY,
-          fwd[2], Ux[2], lat[2], paZ,
+          fwd[0], up[0], lat[0], paX,
+          fwd[1], up[1], lat[1], paY,
+          fwd[2], up[2], lat[2], paZ,
           0,      0,     0,      1);
         cam.projectionMatrix.copy(Pic);
         threeRenderer.render(sc, cam);
@@ -1057,7 +1321,7 @@ const threeLayer = (() => {
   };
 })();
 
-// ── classify ─────────────────────────────────────────────────
+// ── classify ──────────────────────────────────
 // Checked top-to-bottom; first match wins.
 // Type codes are already ICAO alphanumeric (no hyphens in practice), but
 // we strip non-alnum just in case the feed sends e.g. "KC-135".
@@ -1067,13 +1331,13 @@ function classify(d) {
   const gs = d.gs || 0, alt = d.altFt || 0;
 
   if (d.mil) {
-    // ── AWACS / ISR / Command ──────────────────────────────────────
+    // ── AWACS / ISR / Command ──────────────────────────
     // Rotodome, special antenna or electronic mission. Check before tankers
     // because E-3/E-6 type codes can look airliner-like.
     if (/^(E3|E3T|E3CF|E3D|E3S|E7|E7W|E2|E2C|E2D|E4|E6|E8|P3|P3C|P8|RC135|WC135|TC135|OC135|VC25|B70|WJET)/.test(t)) return 'awacs';
     if (/^(SNTRY|DISCO|ROOK|MAGIC|COBRA[0-9]|SWORD|JSTAR|OMEN|SPOOK|TORCH|HAWKEYE)/.test(cs)) return 'awacs';
 
-    // ── Aerial tankers ─────────────────────────────────────────────
+    // ── Aerial tankers ─────────────────────────────────
     // Check before cargo: KC-130 is a tanker variant of the C-130 airframe, so
     // "KC13" must match here before "C130" hits the cargo branch below.
     if (/^(KC46|KC10|KC13|KC130|K35R|K35E|K135|KE3|IL78|VC10|KDC10|DC10T|MRTT|FSTA)/.test(t)) return 'tanker';
@@ -1081,12 +1345,12 @@ function classify(d) {
     if (/^(B762|B764|DC10)/.test(t))       return 'tanker'; // 767-based KC-46 / KC-10 variants
     if (/^(ARCO|TEXACO|BASHER|VAPOR|PETROL|DRAG|KETCH|MAKO|IRON|SHELL|OILER|FRESH|BLUE[0-9]|TOWLINE|SCATHE|PACK[0-9]|GRAY)/.test(cs)) return 'tanker';
 
-    // ── Cargo / airlift ────────────────────────────────────────────
+    // ── Cargo / airlift ───────────────────────────────
     if (/^(C17|C130|C5|C27|C295|A400|IL76|AN12|AN22|AN26|AN70|C141|C160|C2A|C9A|C130J|HC130|MC130|LC130|C5A|C5B|C5M|C40|C32|C37)/.test(t)) return 'cargo';
     // REACH / RCH = Air Mobility Command airlift (NOT tanker — common misclassification)
     if (/^(REACH|RCH|GLOBE|ATLAS|ASCOT|JAKE|ROCKY|RAIDR|COMET|ANVIL)/.test(cs) && gs < 560) return 'cargo';
 
-    // ── Helicopters ────────────────────────────────────────────────
+    // ── Helicopters ──────────────────────────────────
     if (/^(AH64|AH1|EC665|TIGR|A129|LYNX|SA342|BO105|MD530|OH58|UH72)/.test(t)) return 'attack_heli';
     if (/^(CH47|CH53|S61|S70|UH60|UH1|HH60|NH90|EC725|AS33|MI8|MI17|V22|MH60|SH60|MH53|HH53|CH46|EH101|AW101|AW139|AS532)/.test(t)) return 'transport_heli';
     if (gs < 80 && alt < 15000) return 'transport_heli';
@@ -1094,14 +1358,14 @@ function classify(d) {
     return 'fighter'; // fast-movers, trainers, recon jets, UAVs
   }
 
-  // ── Civil ──────────────────────────────────────────────────────
+  // ── Civil ──────────────────────────────────
   if (/^(R[0-9]|EC[0-9]|AW[0-9]|H[0-6]|S76|B06|BK1|MD9|AS3|AS5|EC13|R44|R66|B407)/.test(t)) return 'civil_heli';
   if (gs < 80) return 'civil_heli';
   if (gs < 300 && alt < 20000) return 'civil_prop';
   return 'civil_jet';
 }
 
-// ── labels ────────────────────────────────────────────────────
+// ── labels ──────────────────────────────────
 const labelsEl = document.getElementById('labels');
 const labelEls = new Map();
 
@@ -1141,7 +1405,7 @@ function refreshLabels() {
     if (!vis.has(hex)) el.style.display = 'none';
 }
 
-// ── click to inspect ──────────────────────────────────────────
+// ── click to inspect ───────────────────────────
 map.getCanvas().addEventListener('click', e => {
   const rect = map.getCanvas().getBoundingClientRect();
   const cx = e.clientX - rect.left, cy = e.clientY - rect.top;
@@ -1189,7 +1453,7 @@ function showPanel(d) {
   p.classList.add('open');
 }
 
-// ── fetch + update ────────────────────────────────────────────
+// ── fetch + update ───────────────────────────
 function setStatus(cls, msg) {
   document.getElementById('s-dot').className = 's-dot' + (cls ? ' '+cls : '');
   document.getElementById('status-msg').textContent = msg;
@@ -1231,6 +1495,16 @@ async function fetchAndUpdate() {
         mil:      !!s.mil,
       };
       d.kind = classify(d);
+      // Bank angle: derive from heading change since the previous sample so
+      // aircraft visibly roll into their turns. Clamped to a realistic ±30°.
+      const prev = flightMap.get(hex);
+      if (prev && prev.track != null && d.track != null) {
+        let dTrk = d.track - prev.track;
+        while (dTrk > 180) dTrk -= 360;
+        while (dTrk < -180) dTrk += 360;
+        const target = Math.max(-30, Math.min(30, dTrk * 2.0));
+        d.bank = (prev.bank || 0) * 0.5 + target * 0.5; // smooth
+      } else d.bank = 0;
       newMap.set(hex, d);
     }
 
@@ -1275,6 +1549,7 @@ async function fetchAndUpdate() {
     document.getElementById('hdr-time').textContent =
       new Date().toLocaleTimeString([], { hour:'2-digit', minute:'2-digit', second:'2-digit' });
     setStatus('', `${mil} military aircraft · refreshes every 15 s`);
+    updatePanels();
   } catch(e) {
     setStatus('err', 'Could not reach server — retrying in 15 s');
     console.warn('[flights]', e);
@@ -1286,7 +1561,7 @@ function startFetching() {
   setInterval(fetchAndUpdate, REFRESH_MS);
 }
 
-// ── UI controls ────────────────────────────────────────────────
+// ── UI controls ────────────────────────────────
 document.querySelectorAll('.reg-btn').forEach(btn =>
   btn.addEventListener('click', () => {
     document.querySelectorAll('.reg-btn').forEach(b => b.classList.remove('active'));
@@ -1304,7 +1579,7 @@ document.getElementById('btn-zout').addEventListener('click', () => map.easeTo({
 document.getElementById('info-close').addEventListener('click', () =>
   document.getElementById('info-panel').classList.remove('open'));
 
-// ── view toggles ───────────────────────────────────────────────
+// ── view toggles ───────────────────────────────
 const SAT_TILES  = ['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'];
 const DARK_TILES = ['https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png'];
 
@@ -1315,24 +1590,137 @@ function syncToggleUI() {
   document.getElementById('btn-predict').classList.toggle('active', SHOW_PREDICT);
   document.getElementById('btn-detail') .classList.toggle('active', LABEL_DETAIL);
   document.getElementById('btn-night')  .classList.toggle('active', NIGHT_MODE);
+  document.getElementById('btn-anim')   .classList.toggle('active', ANIMATE);
+  document.getElementById('btn-lights') .classList.toggle('active', SHOW_LIGHTS);
 }
 function toggleLabels()  { SHOW_LABELS  = !SHOW_LABELS;  afterToggle(); }
 function toggleTrails()  { SHOW_TRAILS  = !SHOW_TRAILS;  afterToggle(); }
 function toggleStalks()  { SHOW_STALKS  = !SHOW_STALKS;  afterToggle(); }
 function togglePredict() { SHOW_PREDICT = !SHOW_PREDICT; afterToggle(); }
 function toggleDetail()  { LABEL_DETAIL = !LABEL_DETAIL; afterToggle(); }
+function toggleAnim()    { ANIMATE      = !ANIMATE;      afterToggle(); }
+function toggleLights()  { SHOW_LIGHTS  = !SHOW_LIGHTS;  afterToggle(); }
 function toggleNight()   {
   NIGHT_MODE = !NIGHT_MODE;
   map.getSource('sat').setTiles(NIGHT_MODE ? DARK_TILES : SAT_TILES);
   afterToggle();
 }
 function afterToggle() { savePrefs(); syncToggleUI(); refreshLabels(); map.triggerRepaint(); }
+
+// Time-of-day: move & recolour every registered sun light. 0/24 = midnight
+// (cold, dim), 12 = noon (bright white overhead), dusk/dawn warm & low.
+function applySunHour(h) {
+  SUN_HOUR = h;
+  const ang = (h / 24) * Math.PI * 2 - Math.PI / 2; // noon ≈ overhead
+  const elev = Math.sin((h - 6) / 12 * Math.PI);    // -1 night … +1 noon
+  const daylight = Math.max(0, elev);
+  for (const s of SUN_LIGHTS) {
+    s.position.set(Math.cos(ang), 0.4 + daylight * 1.4, Math.sin(ang) * 0.6);
+    s.intensity = 0.3 + daylight * 2.0;
+    // warm at horizon → white at noon → cool blue at night
+    const warm = new THREE.Color(0xff8844), noon = new THREE.Color(0xfff4dc), night = new THREE.Color(0x3a4a7a);
+    const c = daylight > 0 ? warm.clone().lerp(noon, Math.min(1, daylight * 1.6)) : night;
+    s.color.copy(c);
+  }
+  const lbl = document.getElementById('sun-val');
+  if (lbl) lbl.textContent = String(Math.round(h)).padStart(2, '0') + ':00';
+  if (map) map.triggerRepaint();
+}
 document.getElementById('btn-labels') .addEventListener('click', toggleLabels);
 document.getElementById('btn-trails') .addEventListener('click', toggleTrails);
 document.getElementById('btn-stalks') .addEventListener('click', toggleStalks);
 document.getElementById('btn-predict').addEventListener('click', togglePredict);
 document.getElementById('btn-detail') .addEventListener('click', toggleDetail);
+document.getElementById('btn-anim')   .addEventListener('click', toggleAnim);
+document.getElementById('btn-lights') .addEventListener('click', toggleLights);
 document.getElementById('btn-night')  .addEventListener('click', toggleNight);
+const sunSlider = document.getElementById('sun-slider');
+sunSlider.value = SUN_HOUR;
+sunSlider.addEventListener('input', e => { applySunHour(+e.target.value); savePrefs(); });
+map.on('load', () => applySunHour(SUN_HOUR));
+
+// ── fly to an aircraft (used by search + list + follow) ─────────
+function flyToAircraft(hex, follow = false) {
+  const d = flightMap.get(hex);
+  if (!d) return;
+  map.easeTo({ center: [d.lon, d.lat], zoom: Math.max(map.getZoom(), 7.5), duration: 900 });
+  showPanel(d);
+  if (follow) startFollow(hex);
+}
+
+// ── aircraft list panel ─────────────────────────
+const HEX_COLOR = {
+  fighter:'#33ff88', tanker:'#44aaff', awacs:'#ffdd33', cargo:'#bb88ff',
+  attack_heli:'#33ffcc', transport_heli:'#66ff88',
+  civil_jet:'#ff9955', civil_prop:'#ffcc44', civil_heli:'#ff8855',
+};
+let LIST_OPEN = false;
+function toggleList() {
+  LIST_OPEN = !LIST_OPEN;
+  document.getElementById('ac-list').classList.toggle('open', LIST_OPEN);
+  document.getElementById('btn-list').classList.toggle('active', LIST_OPEN);
+  document.getElementById('legend').style.visibility = LIST_OPEN ? 'hidden' : '';
+  if (LIST_OPEN) rebuildAcList();
+}
+document.getElementById('btn-list').addEventListener('click', toggleList);
+
+function rebuildAcList() {
+  const body = document.getElementById('ac-list-body');
+  const items = [...flightMap.values()]
+    .filter(d => !d.onGround)
+    .filter(d => FILTER_KINDS.size === 0 || FILTER_KINDS.has(d.kind))
+    .sort((a, b) => (b.altFt || 0) - (a.altFt || 0));
+  document.getElementById('ac-list-count').textContent = items.length;
+  if (!LIST_OPEN) return;
+  body.innerHTML = '';
+  for (const d of items.slice(0, 120)) {
+    const row = document.createElement('div');
+    row.className = 'al-row';
+    const alt = d.altFt != null ? 'FL' + String(Math.round(d.altFt/100)).padStart(3,'0') : '—';
+    row.innerHTML = `<div class="al-dot" style="background:${HEX_COLOR[d.kind]||'#fff'}"></div>`
+      + `<div class="al-cs">${d.callsign || d.hex.toUpperCase()}</div>`
+      + `<div class="al-alt">${alt}</div>`;
+    row.addEventListener('click', () => flyToAircraft(d.hex, true));
+    body.appendChild(row);
+  }
+}
+
+// ── callsign / type / hex search ─────────────────────
+const searchInput   = document.getElementById('search-input');
+const searchResults = document.getElementById('search-results');
+function runSearch() {
+  const q = searchInput.value.trim().toUpperCase();
+  if (!q) { searchResults.classList.remove('open'); searchResults.innerHTML = ''; return; }
+  const hits = [...flightMap.values()].filter(d => {
+    return (d.callsign || '').toUpperCase().includes(q)
+        || (d.typeCode || '').toUpperCase().includes(q)
+        || (d.hex || '').toUpperCase().includes(q)
+        || (d.reg || '').toUpperCase().includes(q);
+  }).slice(0, 8);
+  searchResults.innerHTML = '';
+  if (!hits.length) {
+    searchResults.innerHTML = '<div class="sr-row"><small>No matching aircraft</small></div>';
+  } else {
+    for (const d of hits) {
+      const row = document.createElement('div');
+      row.className = 'sr-row';
+      row.innerHTML = `<b>${d.callsign || d.hex.toUpperCase()}</b> <small>${d.typeCode || ''} · `
+        + `${d.altFt != null ? Math.round(d.altFt).toLocaleString()+'ft' : '—'}</small>`;
+      row.addEventListener('click', () => {
+        flyToAircraft(d.hex, true);
+        searchResults.classList.remove('open');
+        searchInput.value = '';
+      });
+      searchResults.appendChild(row);
+    }
+  }
+  searchResults.classList.add('open');
+}
+searchInput.addEventListener('input', runSearch);
+searchInput.addEventListener('keydown', e => { if (e.key === 'Escape') { searchInput.value=''; searchResults.classList.remove('open'); searchInput.blur(); } });
+
+// Refresh the auxiliary panels whenever data updates.
+function updatePanels() { rebuildAcList(); if (searchInput.value) runSearch(); }
 // Apply persisted night mode once the map has loaded (source exists by then)
 if (NIGHT_MODE) {
   if (map.isStyleLoaded()) {
@@ -1343,7 +1731,7 @@ if (NIGHT_MODE) {
 }
 syncToggleUI();
 
-// ── legend type filter ─────────────────────────────────────────
+// ── legend type filter ─────────────────────────
 document.querySelectorAll('.lr[data-kind]').forEach(el => {
   el.addEventListener('click', () => {
     const k = el.dataset.kind;
@@ -1355,6 +1743,7 @@ document.querySelectorAll('.lr[data-kind]').forEach(el => {
     document.getElementById('legend-clear').style.display = hasFilter ? '' : 'none';
     map.triggerRepaint();
     refreshLabels();
+    rebuildAcList();
   });
 });
 document.getElementById('legend-clear').addEventListener('click', () => {
@@ -1363,9 +1752,10 @@ document.getElementById('legend-clear').addEventListener('click', () => {
   document.getElementById('legend-clear').style.display = 'none';
   map.triggerRepaint();
   refreshLabels();
+  rebuildAcList();
 });
 
-// ── follow mode ────────────────────────────────────────────────
+// ── follow mode ────────────────────────────────
 function startFollow(hex) {
   followHex = hex;
   const label = flightMap.get(hex)?.callsign || hex.toUpperCase();
@@ -1393,7 +1783,7 @@ document.getElementById('i-follow').addEventListener('click', () => {
   if (flightMap.has(panelHex)) showPanel(flightMap.get(panelHex));
 });
 
-// ── keyboard shortcuts ─────────────────────────────────────────
+// ── keyboard shortcuts ─────────────────────────
 window.addEventListener('keydown', e => {
   if (e.target.tagName === 'INPUT' || e.metaKey || e.ctrlKey) return;
   switch (e.key.toLowerCase()) {
@@ -1403,8 +1793,13 @@ window.addEventListener('keydown', e => {
     case 'p': togglePredict(); break;
     case 'd': toggleDetail();  break;
     case 'n': toggleNight();   break;
+    case 'a': toggleAnim();    break;
+    case 'g': toggleLights();  break;
+    case 'f': toggleList();    break;
+    case '/': e.preventDefault(); document.getElementById('search-input').focus(); break;
     case 'escape':
       document.getElementById('info-panel').classList.remove('open');
+      document.getElementById('search-results').classList.remove('open');
       stopFollow();
       break;
     case '+': case '=': map.easeTo({ zoom: map.getZoom()+0.8, duration: 300 }); break;
